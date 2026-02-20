@@ -3,29 +3,12 @@
 import { NextResponse } from "next/server";
 import { cloudinary } from "@/lib/cloudinary";
 import sharp from "sharp";
+import { cleanBackgroundAndAddWhiteStroke, getSmartLogoBox } from "@/lib/logoSmart";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const MAX_AI_PX = 640;
-
-function getSmartLogoBox(ar: number): { w: number; h: number } {
-  let w: number;
-  if (ar < 0.85)       w = 40;
-  else if (ar <= 1.18) w = 64;
-  else if (ar <= 1.7)  w = 88;
-  else if (ar <= 2.4)  w = 96;
-  else if (ar <= 3.4)  w = 106;
-  else if (ar <= 4.4)  w = 114;
-  else if (ar <= 5.4)  w = 122;
-  else if (ar <= 6.4)  w = 130;
-  else if (ar <= 7.4)  w = 138;
-  else if (ar <= 8.4)  w = 146;
-  else if (ar <= 9.4)  w = 154;
-  else                 w = 160;
-  const h = Math.round(w / ar);
-  return { w, h };
-}
 
 async function preprocessForAI(buffer: Buffer): Promise<Buffer> {
   const trimmed = await sharp(buffer, { failOn: "none" })
@@ -124,82 +107,49 @@ export async function POST(req: Request) {
     // 2) Pre-procesar: trim agresivo + escalar a máx 640px
     const aiBuf = await preprocessForAI(rawBuf);
 
-    // 3) OpenAI: mejorar logo + fondo transparente + borde blanco de forma
+    // 3) OpenAI: mejorar calidad sin rediseñar y adaptar logos pensados para dark mode
     const prompt = `
-You are a technical image processor. You are NOT allowed to redesign, recreate, enhance, reinterpret, or restyle the logo.
+You are a technical image processor.
+Do not redesign, recreate, reinterpret, or restyle the logo.
 
-Your task is strictly pixel-level processing.
+Your task is only to improve output quality while preserving brand geometry.
 
 ────────────────────────
 CRITICAL RULES
 ────────────────────────
 
-• DO NOT redraw anything.
-• DO NOT recreate text.
-• DO NOT regenerate shapes.
-• DO NOT change any internal color.
-• DO NOT modify any non-background pixel.
-• White areas inside the logo are NEVER background.
-• Transparent text must NEVER be created.
-• If a letter is white in the original, it must remain solid white.
-
-You must preserve 100% of the original logo exactly as-is.
+• Do NOT redraw text or symbols.
+• Do NOT change proportions or spacing.
+• Keep edges crisp and clean.
+• No glow, no shadow, no artifacts.
+• No decorative changes.
 
 ────────────────────────
-STEP 1 — BACKGROUND REMOVAL
+STEP 1 — QUALITY UPSCALE
 ────────────────────────
 
-Remove ONLY the outer background (areas connected to the image edges).
-
-Important:
-• Background means only the outer empty area.
-• Do NOT remove white pixels inside the logo.
-• Do NOT remove light gray or white shapes inside the logo.
-• Do NOT convert text to transparent.
-
-Result must have:
-• Fully transparent outer background
-• Original logo completely intact
+Generate a cleaner, sharper, high-quality version of the same logo.
+Preserve original structure and visual identity.
 
 ────────────────────────
-STEP 2 — ADD 4PX WHITE OUTLINE
+STEP 2 — LIGHT MODE ADAPTATION (ONLY IF NEEDED)
 ────────────────────────
 
-Add a 4 pixel white stroke OUTSIDE the exact silhouette of the logo.
+If the logo uses white letters, white symbols, or very light gray elements intended for dark backgrounds,
+convert those foreground elements to dark tones so the logo is readable on light mode.
 
-Rules for the stroke:
-
-• Stroke must follow the true contour of the logo.
-• Stroke must wrap tightly around:
-  - Diamonds
-  - Arrows
-  - Rectangles
-  - Text boxes
-• Stroke must NOT be rectangular.
-• Stroke must NOT cut into the logo.
-• Stroke must be entirely outside the existing shape.
-• Stroke color: pure white (#FFFFFF).
-• Thickness: exactly 4 pixels.
-
-The interior of the logo must remain pixel-identical.
-
-────────────────────────
-STEP 3 — QUALITY
-────────────────────────
-
-• Keep sharp edges.
-• Do NOT add glow.
-• Do NOT add shadow.
-• Do NOT soften edges.
-• Do NOT change color saturation.
+Rules:
+• Apply this only to foreground logo content.
+• Keep contrast high on white backgrounds.
+• Preserve the original shape of every letter and icon.
 
 ────────────────────────
 OUTPUT
 ────────────────────────
 
-• Transparent PNG
-• Tight crop
-• No extra padding
+• PNG output
+• White background
+• Clean, production-ready quality
 • No redesign
 `.trim();
 
@@ -232,11 +182,8 @@ OUTPUT
     // 4) Fallback: forzar transparencia si OpenAI dejó fondo sólido
     const transparent = await forceTransparency(enhancedBuf);
 
-    // 5) Trim final
-    const finalBuf = await sharp(transparent, { failOn: "none" })
-      .trim({ threshold: 10 })
-      .png()
-      .toBuffer();
+    // 5) Limpiar alpha y agregar borde blanco de 2px (preferentemente con ImageMagick)
+    const finalBuf = await cleanBackgroundAndAddWhiteStroke(transparent, 2);
 
     // 6) Calcular AR y box inteligente
     const finalMeta = await sharp(finalBuf).metadata();
