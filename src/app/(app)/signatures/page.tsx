@@ -8,7 +8,6 @@ import * as Yup from "yup";
 import Box from "@mui/joy/Box";
 import Typography from "@mui/joy/Typography";
 import Stack from "@mui/joy/Stack";
-import Divider from "@mui/joy/Divider";
 import FormControl from "@mui/joy/FormControl";
 import FormLabel from "@mui/joy/FormLabel";
 import Input from "@mui/joy/Input";
@@ -70,7 +69,7 @@ export default function OutlookSignaturePage() {
     initialValues: {
       fullName:     "Reinalyn Bancifra",
       title:        "Marketing Coordinator",
-      contactLines: "Phone: 479-394-2244\nFax: 479-394-2249\nDirect: 479-394-2249\nCell: 479-394-2249",
+      contactLines: "Phone: 479-394-2244\nFax: 479-394-2249",
       email:        "rbancifra@inszoneins.com",
       address:      "206 Highway 71 N.\nMena, AR 71953",
       lic:          "LIC OK#108343",
@@ -181,12 +180,11 @@ export default function OutlookSignaturePage() {
           {err}
         </Alert>
       )}
-
-      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 2 }}>
-        {/* LEFT */}
-        <Box>
-          <form onSubmit={formik.handleSubmit}>
-            <Stack spacing={1.5}>
+      
+      <div className="flex gap-10 w-full">
+        <div className="flex-2">
+          <form onSubmit={formik.handleSubmit} className="flex gap-8">
+            <div className="flex flex-col gap-4 flex-1">
 
               {/* Full Name */}
               <FormControl error={Boolean(formik.touched.fullName && formik.errors.fullName)}>
@@ -209,12 +207,9 @@ export default function OutlookSignaturePage() {
               {/* Contact Lines */}
               <FormControl error={Boolean(formik.touched.contactLines && formik.errors.contactLines)}>
                 <FormLabel>Líneas de contacto</FormLabel>
-                <Typography level="body-xs" sx={{ opacity: 0.6, mb: 0.5 }}>
-                  Una línea por campo: Phone, Fax, Direct, Cell, etc.
-                </Typography>
                 <Textarea
                   name="contactLines"
-                  minRows={4}
+                  minRows={2}
                   value={formik.values.contactLines}
                   onChange={formik.handleChange}
                   onBlur={formik.handleBlur}
@@ -259,8 +254,8 @@ export default function OutlookSignaturePage() {
                   onBlur={formik.handleBlur}
                 />
               </FormControl>
-
-              <Divider sx={{ my: 1 }} />
+            </div>
+            <div className="flex flex-col gap-4 flex-1">
 
               {/* Logo upload */}
               <FormControl>
@@ -290,7 +285,15 @@ export default function OutlookSignaturePage() {
                 </label>
               </FormControl>
 
-              <Stack direction="row" spacing={1}>
+              <Typography level="title-md" sx={{ mt: 2 }}>
+                Logos
+              </Typography>
+              <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
+                <LogoCard title="Original" data={original} />
+                <LogoCard title="Procesado" data={enhanced} />
+              </Box>
+
+              <Stack direction="row" spacing={1} className="mt-4">
                 <Button variant="soft" onClick={handleEnhance} disabled={!original?.secure_url || busyEnhance}>
                   {busyEnhance ? "Mejorando..." : "Mejorar con IA"}
                 </Button>
@@ -298,20 +301,10 @@ export default function OutlookSignaturePage() {
                   {busyGenerate ? "Generando..." : "Generar firma"}
                 </Button>
               </Stack>
-            </Stack>
+            </div>
           </form>
-
-          <Typography level="title-md" sx={{ mt: 2, mb: 1 }}>
-            Logos
-          </Typography>
-          <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
-            <LogoCard title="Original" data={original} />
-            <LogoCard title="Procesado" data={enhanced} />
-          </Box>
-        </Box>
-
-        {/* RIGHT */}
-        <Box>
+        </div>
+        <div className="flex-1">
           <Typography level="title-md" sx={{ mb: 1 }}>
             Preview
           </Typography>
@@ -330,8 +323,8 @@ export default function OutlookSignaturePage() {
               Copy Signature
             </Button>
           )}
-        </Box>
-      </Box>
+        </div>
+      </div>
     </>
   );
 }
