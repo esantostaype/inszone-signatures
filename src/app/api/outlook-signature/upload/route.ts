@@ -1,45 +1,64 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from "next/server";
-import { cloudinary } from "@/lib/cloudinary";
+import { v2 as cloudinary } from "cloudinary";
+import { detectSmartPlan, buildSmartDisplayUrl } from "@/lib/logoSmart";
 
 export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME!,
+  api_key: process.env.CLOUDINARY_API_KEY!,
+  api_secret: process.env.CLOUDINARY_API_SECRET!,
+});
 
 export async function POST(req: Request) {
   try {
     const form = await req.formData();
-    const file = form.get("file") as File | null;
+    const file = form.get("file");
 
-    if (!file) return NextResponse.json({ error: "Missing file" }, { status: 400 });
-    if (!file.type.startsWith("image/")) {
-      return NextResponse.json({ error: "File must be an image" }, { status: 400 });
+    if (!file || !(file instanceof Blob)) {
+      return NextResponse.json({ error: "No file in form-data (field: file)" }, { status: 400 });
     }
 
-    const buf = Buffer.from(await file.arrayBuffer());
+    const buffer = Buffer.from(await file.arrayBuffer());
 
+    // 1) detectar plan
+    const plan = await detectSmartPlan(buffer);
+
+    // 2) subir original
     const uploadResult = await new Promise<any>((resolve, reject) => {
-      const stream = cloudinary.uploader.upload_stream(
-        {
-          folder: "outlook-signatures/originals",
-          resource_type: "image",
-        },
-        (err, result) => {
-          if (err) reject(err);
-          else resolve(result);
-        }
-      );
-      stream.end(buf);
+      cloudinary.uploader
+        .upload_stream({ folder: "logos", resource_type: "image" }, (err, result) =>
+          err ? reject(err) : resolve(result)
+        )
+        .end(buffer);
+    });
+
+    const cloudName = process.env.CLOUDINARY_CLOUD_NAME!;
+
+    // 3) URL smart (con trim / transparencia / IA si aplica)
+    // Si background_removal no está habilitado, podrías preferir usar el safePlan aquí.
+    const safePlan = plan.kind === "COMPLEX_BG" ? ({ kind: "HAS_ALPHA" } as const) : plan;
+
+    const displayUrl = buildSmartDisplayUrl({
+      cloudName,
+      publicId: uploadResult.public_id,
+      srcW: uploadResult.width,
+      srcH: uploadResult.height,
+      plan: safePlan,     // <- evita romper si no tienes IA habilitada
+      canvas: "fit",
     });
 
     return NextResponse.json({
       public_id: uploadResult.public_id,
-      secure_url: uploadResult.secure_url,
+      secure_url: displayUrl,
       width: uploadResult.width,
       height: uploadResult.height,
       bytes: uploadResult.bytes,
       format: uploadResult.format,
+      plan,
     });
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message || "Upload failed" }, { status: 500 });
+    return NextResponse.json({ error: e?.message ?? "Upload failed" }, { status: 500 });
   }
 }

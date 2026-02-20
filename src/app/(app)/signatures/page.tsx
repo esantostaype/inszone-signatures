@@ -16,6 +16,7 @@ import Button from "@mui/joy/Button";
 import Alert from "@mui/joy/Alert";
 import { MainTitle } from "@/components/MainTitle";
 import Image from "next/image";
+import { getSmartLogoSize } from "@/lib/logoSizing";
 
 type UploadResult = {
   public_id: string;
@@ -114,10 +115,19 @@ export default function OutlookSignaturePage() {
       fd.append("file", file);
 
       const r = await fetch("/api/outlook-signature/upload", { method: "POST", body: fd });
-      const json = await r.json();
-      if (!r.ok) throw new Error(json?.error || "Upload failed");
+      const contentType = r.headers.get("content-type") || "";
+const bodyText = await r.text();
 
-      setOriginal(json);
+if (!r.ok) {
+  throw new Error(`Upload failed (${r.status}). ${bodyText.slice(0, 300)}`);
+}
+
+if (!contentType.includes("application/json")) {
+  throw new Error(`Expected JSON but got: ${contentType}. Body: ${bodyText.slice(0, 300)}`);
+}
+
+const json = JSON.parse(bodyText);
+setOriginal(json);
 
       if ((json?.width ?? 0) < 300 || (json?.height ?? 0) < 300) {
         setErr("⚠️ El logo parece pequeño. La IA puede ayudar, pero lo ideal es subir un PNG grande o SVG.");
@@ -289,7 +299,7 @@ export default function OutlookSignaturePage() {
                 Logos
               </Typography>
               <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
-                <LogoCard title="Original" data={original} />
+                <LogoCard title="Original" data={original} smart />
                 <LogoCard title="Procesado" data={enhanced} />
               </Box>
 
@@ -329,18 +339,38 @@ export default function OutlookSignaturePage() {
   );
 }
 
-function LogoCard({ title, data }: { title: string; data: UploadResult | null }) {
+function LogoCard({
+  title,
+  data,
+  smart = false,
+}: {
+  title: string;
+  data: UploadResult | null;
+  smart?: boolean;
+}) {
+  const size = smart ? getSmartLogoSize(data?.width, data?.height) : { w: 96, h: 96 };
+
   return (
     <div className="bg-white/4 rounded-lg p-4">
       <Typography level="title-sm" sx={{ mb: 1 }}>
         {title}
       </Typography>
-      <div className="aspect-[4/3] flex flex-col gap-2 items-center justify-center">
+
+      {/* Quitamos el aspect fijo para que el logo pueda tener su tamaño real */}
+      <div className="flex flex-col gap-2 items-center justify-center">
         {data?.secure_url ? (
           <>
-            <Image src={data.secure_url} alt={title} className="object-contain object-center aspect-[4/3]" width={96} height={96} />
+            <Image
+              src={data.secure_url}
+              alt={title}
+              width={size.w}
+              height={size.h}
+              style={{ width: size.w, height: size.h, objectFit: "contain" }}
+            />
+
             <Typography level="body-xs" sx={{ opacity: 0.8 }}>
               {data.width}×{data.height} • {Math.round((data.bytes ?? 0) / 1024)} KB • {data.format}
+              {smart ? ` • render ${size.w}×${size.h}` : ""}
             </Typography>
           </>
         ) : (
