@@ -3,12 +3,29 @@
 import { NextResponse } from "next/server";
 import { cloudinary } from "@/lib/cloudinary";
 import sharp from "sharp";
-import { cleanBackgroundAndAddWhiteStroke, getSmartLogoBox } from "@/lib/logoSmart";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const MAX_AI_PX = 640;
+
+function getSmartLogoBox(ar: number): { w: number; h: number } {
+  let w: number;
+  if (ar < 0.85)       w = 40;
+  else if (ar <= 1.18) w = 64;
+  else if (ar <= 1.7)  w = 88;
+  else if (ar <= 2.4)  w = 96;
+  else if (ar <= 3.4)  w = 106;
+  else if (ar <= 4.4)  w = 114;
+  else if (ar <= 5.4)  w = 122;
+  else if (ar <= 6.4)  w = 130;
+  else if (ar <= 7.4)  w = 138;
+  else if (ar <= 8.4)  w = 146;
+  else if (ar <= 9.4)  w = 154;
+  else                 w = 160;
+  const h = Math.round(w / ar);
+  return { w, h };
+}
 
 async function preprocessForAI(buffer: Buffer): Promise<Buffer> {
   const trimmed = await sharp(buffer, { failOn: "none" })
@@ -107,50 +124,29 @@ export async function POST(req: Request) {
     // 2) Pre-procesar: trim agresivo + escalar a máx 640px
     const aiBuf = await preprocessForAI(rawBuf);
 
-    // 3) OpenAI: mejorar calidad sin rediseñar y adaptar logos pensados para dark mode
+    // 3) OpenAI: mejorar logo + fondo transparente + borde blanco de forma
     const prompt = `
-You are a technical image processor.
-Do not redesign, recreate, reinterpret, or restyle the logo.
+You are a professional graphic designer. Your task is to process this company logo image. Follow every instruction EXACTLY:
 
-Your task is only to improve output quality while preserving brand geometry.
+STEP 1 - BACKGROUND REMOVAL:
+Remove ONLY the background (areas outside the logo). The background must become fully transparent (PNG alpha = 0). Do not touch anything inside or touching the logo.
 
-────────────────────────
-CRITICAL RULES
-────────────────────────
+STEP 2 - PRESERVE EVERYTHING:
+Keep ALL of the following exactly as they are in the original:
+- Every color: reds, blacks, grays, whites inside the logo
+- All colored rectangles or boxes that are part of the logo design (red background behind text, dark background behind "Agency Inc." — keep them)
+- All text exactly as written with original font, weight and color
+- All shapes: diamonds, arrows, geometric forms
+- Do NOT recolor, reinterpret, or stylize anything
 
-• Do NOT redraw text or symbols.
-• Do NOT change proportions or spacing.
-• Keep edges crisp and clean.
-• No glow, no shadow, no artifacts.
-• No decorative changes.
+STEP 3 - QUALITY:
+If the image is blurry or pixelated, sharpen it. Produce crisp, clean edges.
 
-────────────────────────
-STEP 1 — QUALITY UPSCALE
-────────────────────────
+STEP 4 - WHITE STROKE BORDER:
+Add a white outline stroke of exactly 4 pixels thickness that follows the exact silhouette/shape of every logo element. The stroke must wrap tightly around: the diamond shapes, the text boxes, the colored rectangles — every visible element. The stroke must NOT be rectangular. It must follow the natural contour of each shape.
 
-Generate a cleaner, sharper, high-quality version of the same logo.
-Preserve original structure and visual identity.
-
-────────────────────────
-STEP 2 — LIGHT MODE ADAPTATION (ONLY IF NEEDED)
-────────────────────────
-
-If the logo uses white letters, white symbols, or very light gray elements intended for dark backgrounds,
-convert those foreground elements to dark tones so the logo is readable on light mode.
-
-Rules:
-• Apply this only to foreground logo content.
-• Keep contrast high on white backgrounds.
-• Preserve the original shape of every letter and icon.
-
-────────────────────────
-OUTPUT
-────────────────────────
-
-• PNG output
-• White background
-• Clean, production-ready quality
-• No redesign
+STEP 5 - OUTPUT FORMAT:
+Output a transparent PNG. Tight crop — minimal empty space around the logo.
 `.trim();
 
     const form = new FormData();
@@ -182,8 +178,11 @@ OUTPUT
     // 4) Fallback: forzar transparencia si OpenAI dejó fondo sólido
     const transparent = await forceTransparency(enhancedBuf);
 
-    // 5) Limpiar alpha y agregar borde blanco de 2px (preferentemente con ImageMagick)
-    const finalBuf = await cleanBackgroundAndAddWhiteStroke(transparent, 2);
+    // 5) Trim final
+    const finalBuf = await sharp(transparent, { failOn: "none" })
+      .trim({ threshold: 10 })
+      .png()
+      .toBuffer();
 
     // 6) Calcular AR y box inteligente
     const finalMeta = await sharp(finalBuf).metadata();
