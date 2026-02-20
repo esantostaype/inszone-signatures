@@ -2,9 +2,9 @@
 // src/app/api/upload-logo/route.ts
 import { NextResponse } from "next/server";
 import { cloudinary } from "@/lib/cloudinary";
-import { detectSmartPlan, buildSmartDisplayUrl } from "@/lib/logoSmart";
+import { analyzeLogoBuffer, buildSmartDisplayUrl } from "@/lib/logoSmart";
 
-export const runtime = "nodejs"; // sharp requiere node runtime
+export const runtime = "nodejs";
 
 export async function POST(req: Request) {
   try {
@@ -15,63 +15,46 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "No file" }, { status: 400 });
     }
 
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    const buffer = Buffer.from(await file.arrayBuffer());
 
-    // 1) Decide plan automáticamente (alpha / fondo sólido / fondo complejo)
-    const plan = await detectSmartPlan(buffer);
+    // 1) Analizar + procesar localmente (remover fondo, trim, calcular AR)
+    const { plan, trimmedAr, box, processedBuffer } = await analyzeLogoBuffer(buffer);
 
-    // 2) Upload (guardamos original tal cual)
+    // 2) Subir el buffer YA PROCESADO a Cloudinary (PNG con transparencia)
     const uploadResult = await new Promise<any>((resolve, reject) => {
       cloudinary.uploader.upload_stream(
         {
           folder: "logos",
           resource_type: "image",
+          format: "png", // forzar PNG para preservar alpha
         },
         (err, result) => (err ? reject(err) : resolve(result))
-      ).end(buffer);
+      ).end(processedBuffer);
     });
 
     const cloudName = process.env.CLOUDINARY_CLOUD_NAME!;
 
-    // 3) Genera URL para mostrar el ORIGINAL de forma “inteligente”
-    //    (puedes usar canvas: "fit" o "pad")
-    //    NOTA IMPORTANTE:
-    //    - Si plan = COMPLEX_BG y tu cuenta NO soporta background_removal, esta URL puede fallar
-    //      si Cloudinary intenta aplicar el efecto y lo rechaza.
-    //    - Para hacerlo 100% robusto, abajo te dejo el fallback “safe” (sin IA) también.
-    const originalDisplayUrl = buildSmartDisplayUrl({
+    // 3) URL con resize inteligente (sin transformaciones de fondo — ya está limpio)
+    const displayUrl = buildSmartDisplayUrl({
       cloudName,
       publicId: uploadResult.public_id,
-      srcW: uploadResult.width,
-      srcH: uploadResult.height,
-      plan,
-      canvas: "fit",
-    });
-
-    // 4) URL “safe” (nunca usa IA) por si quieres que SIEMPRE funcione:
-    const safePlan = plan.kind === "COMPLEX_BG" ? { kind: "HAS_ALPHA" as const } : plan;
-    const safeDisplayUrl = buildSmartDisplayUrl({
-      cloudName,
-      publicId: uploadResult.public_id,
-      srcW: uploadResult.width,
-      srcH: uploadResult.height,
-      plan: safePlan,
-      canvas: "fit",
+      box,
     });
 
     return NextResponse.json({
-      public_id: uploadResult.public_id,
-      secure_url: uploadResult.secure_url,
-      width: uploadResult.width,
-      height: uploadResult.height,
-      bytes: uploadResult.bytes,
-      format: uploadResult.format,
+      public_id:   uploadResult.public_id,
+      secure_url:  uploadResult.secure_url,  // original procesado sin resize
+      display_url: displayUrl,               // ← usar esta en la firma y preview
+      width:       box.w,                    // ← ancho visual correcto para el HTML
+      height:      box.h,                    // ← alto visual correcto para el HTML
+      trimmed_ar:  trimmedAr,
+      bytes:       uploadResult.bytes,
+      format:      "png",
       plan,
-      originalDisplayUrl,
-      safeDisplayUrl,
     });
+
   } catch (e: any) {
+    console.error("UPLOAD ERROR:", e);
     return NextResponse.json(
       { error: e?.message ?? "Upload failed" },
       { status: 500 }

@@ -14,38 +14,68 @@ import Input from "@mui/joy/Input";
 import Textarea from "@mui/joy/Textarea";
 import Button from "@mui/joy/Button";
 import Alert from "@mui/joy/Alert";
+import CircularProgress from "@mui/joy/CircularProgress";
+import Chip from "@mui/joy/Chip";
 import { MainTitle } from "@/components/MainTitle";
 import Image from "next/image";
-import { getSmartLogoSize } from "@/lib/logoSizing";
+
+// ── Tipos ─────────────────────────────────────────────────────────────────────
 
 type UploadResult = {
-  public_id: string;
-  secure_url: string;
-  width: number;
-  height: number;
-  bytes: number;
-  format: string;
+  public_id:   string;
+  secure_url:  string;
+  display_url: string;
+  width:       number;
+  height:      number;
+  bytes:       number;
+  format:      string;
+  trimmed_ar?: number;
 };
 
+type LogoPhase =
+  | null
+  | "uploading"
+  | "analyzing"
+  | "enhancing"
+  | "perfect"
+  | "enhanced";
+
+// ── Validación ─────────────────────────────────────────────────────────────────
+
 const schema = Yup.object({
-  fullName:      Yup.string().trim().min(2).required("Nombre requerido"),
-  title:         Yup.string().trim().min(2).required("Cargo requerido"),
-  contactLines:  Yup.string().trim().min(2).required("Líneas de contacto requeridas"),
-  email:         Yup.string().trim().email("Email inválido").required("Email requerido"),
-  address:       Yup.string().trim().min(2).required("Dirección requerida"),
-  lic:           Yup.string().trim().optional(),
+  fullName:     Yup.string().trim().min(2).required("Nombre requerido"),
+  title:        Yup.string().trim().min(2).required("Cargo requerido"),
+  contactLines: Yup.string().trim().min(2).required("Líneas de contacto requeridas"),
+  email:        Yup.string().trim().email("Email inválido").required("Email requerido"),
+  address:      Yup.string().trim().min(2).required("Dirección requerida"),
+  lic:          Yup.string().trim().optional(),
 });
 
+// ── Página ─────────────────────────────────────────────────────────────────────
+
 export default function OutlookSignaturePage() {
-  const [original, setOriginal] = React.useState<UploadResult | null>(null);
-  const [enhanced, setEnhanced] = React.useState<UploadResult | null>(null);
-  const [signatureHtml, setSignatureHtml] = React.useState("");
-  const [busyUpload, setBusyUpload] = React.useState(false);
-  const [busyEnhance, setBusyEnhance] = React.useState(false);
-  const [busyGenerate, setBusyGenerate] = React.useState(false);
-  const [err, setErr] = React.useState<string>("");
+  const [original,         setOriginal]         = React.useState<UploadResult | null>(null);
+  const [enhanced,         setEnhanced]         = React.useState<UploadResult | null>(null);
+  // URL local del archivo que subió el usuario — sin ningún procesamiento
+  const [rawPreviewUrl,    setRawPreviewUrl]    = React.useState<string | null>(null);
+  const [signatureHtml,    setSignatureHtml]    = React.useState("");
+  const [busyGenerate,     setBusyGenerate]     = React.useState(false);
+  const [err,              setErr]              = React.useState<string>("");
+  const [phase,            setPhase]            = React.useState<LogoPhase>(null);
+  const [phaseMsg,         setPhaseMsg]         = React.useState<string>("");
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const activeLogo   = enhanced ?? original;
+  const userLogoUrl  = activeLogo?.display_url || "";
+  const isProcessing = phase === "uploading" || phase === "analyzing" || phase === "enhancing";
+
+  // Limpiar objectURL al desmontar o al cambiar de imagen
+  React.useEffect(() => {
+    return () => {
+      if (rawPreviewUrl) URL.revokeObjectURL(rawPreviewUrl);
+    };
+  }, [rawPreviewUrl]);
 
   function handleDragOver(e: React.DragEvent<HTMLLabelElement>) {
     e.preventDefault();
@@ -64,8 +94,6 @@ export default function OutlookSignaturePage() {
     if (file) handleUpload(file);
   }
 
-  const userLogoUrl = enhanced?.secure_url || original?.secure_url || "";
-
   const formik = useFormik({
     initialValues: {
       fullName:     "Reinalyn Bancifra",
@@ -80,20 +108,19 @@ export default function OutlookSignaturePage() {
       setErr("");
       setBusyGenerate(true);
       setSignatureHtml("");
-
       try {
         const r = await fetch("/api/outlook-signature/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             ...values,
-            userLogoUrl: userLogoUrl || undefined,
+            userLogoUrl:    userLogoUrl || undefined,
+            userLogoWidth:  activeLogo?.width  || undefined,
+            userLogoHeight: activeLogo?.height || undefined,
           }),
         });
-
         const json = await r.json();
         if (!r.ok) throw new Error(json?.error || "No se pudo generar la firma");
-
         setSignatureHtml(json.html);
       } catch (e: any) {
         setErr(e?.message || "Error generando firma");
@@ -103,72 +130,90 @@ export default function OutlookSignaturePage() {
     },
   });
 
+  // ── Pipeline: upload → analyze → enhance ─────────────────────────────────────
+
   async function handleUpload(file: File) {
     setErr("");
-    setBusyUpload(true);
     setOriginal(null);
     setEnhanced(null);
     setSignatureHtml("");
+    setPhase("uploading");
+    setPhaseMsg("Subiendo logo…");
+
+    // ✅ Crear URL local del archivo original ANTES de cualquier procesamiento
+    if (rawPreviewUrl) URL.revokeObjectURL(rawPreviewUrl);
+    setRawPreviewUrl(URL.createObjectURL(file));
 
     try {
+      // PASO 1: Upload a Cloudinary + sharp (para calcular AR y display_url)
       const fd = new FormData();
       fd.append("file", file);
 
-      const r = await fetch("/api/outlook-signature/upload", { method: "POST", body: fd });
-      const contentType = r.headers.get("content-type") || "";
-const bodyText = await r.text();
+      const uploadRes  = await fetch("/api/upload-logo", { method: "POST", body: fd });
+      const uploadText = await uploadRes.text();
 
-if (!r.ok) {
-  throw new Error(`Upload failed (${r.status}). ${bodyText.slice(0, 300)}`);
-}
-
-if (!contentType.includes("application/json")) {
-  throw new Error(`Expected JSON but got: ${contentType}. Body: ${bodyText.slice(0, 300)}`);
-}
-
-const json = JSON.parse(bodyText);
-setOriginal(json);
-
-      if ((json?.width ?? 0) < 300 || (json?.height ?? 0) < 300) {
-        setErr("⚠️ El logo parece pequeño. La IA puede ayudar, pero lo ideal es subir un PNG grande o SVG.");
+      if (!uploadRes.ok) {
+        throw new Error(`Upload failed (${uploadRes.status}). ${uploadText.slice(0, 300)}`);
       }
-    } catch (e: any) {
-      setErr(e?.message || "Error subiendo imagen");
-    } finally {
-      setBusyUpload(false);
-    }
-  }
+      if (!uploadRes.headers.get("content-type")?.includes("application/json")) {
+        throw new Error(`Expected JSON. Body: ${uploadText.slice(0, 300)}`);
+      }
 
-  async function handleEnhance() {
-    if (!original?.secure_url) return;
-    setErr("");
-    setBusyEnhance(true);
-    setEnhanced(null);
-    setSignatureHtml("");
+      const uploadJson: UploadResult = JSON.parse(uploadText);
+      setOriginal(uploadJson);
 
-    try {
-      const r = await fetch("/api/outlook-signature/enhance", {
+      // PASO 2: Analizar con GPT-4o Vision
+      setPhase("analyzing");
+      setPhaseMsg("Analizando calidad del logo con IA…");
+
+      const analyzeRes  = await fetch("/api/outlook-signature/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageUrl: original.secure_url }),
+        body: JSON.stringify({ imageUrl: uploadJson.display_url }),
       });
-      const json = await r.json();
-      if (!r.ok) throw new Error(json?.error || "Enhance failed");
+      const analyzeJson = await analyzeRes.json();
+      const needsWork: boolean = analyzeJson?.needsWork ?? true;
+      const reason: string     = analyzeJson?.reason    ?? "";
 
-      setEnhanced(json);
+      if (!needsWork) {
+        setPhase("perfect");
+        setPhaseMsg(reason);
+        return;
+      }
+
+      // PASO 3: Mejorar con GPT image generation
+      setPhase("enhancing");
+      setPhaseMsg(reason + " — generando logo mejorado…");
+
+      const enhanceRes  = await fetch("/api/outlook-signature/enhance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageUrl: uploadJson.secure_url }),
+      });
+      const enhanceJson = await enhanceRes.json();
+      if (!enhanceRes.ok) throw new Error(enhanceJson?.error || "Enhance failed");
+
+      setEnhanced({
+        ...enhanceJson,
+        width:  uploadJson.width,
+        height: uploadJson.height,
+      });
+      setPhase("enhanced");
+      setPhaseMsg("Logo mejorado con IA ✓");
+
     } catch (e: any) {
-      setErr(e?.message || "Error mejorando logo");
-    } finally {
-      setBusyEnhance(false);
+      setErr(e?.message || "Error procesando logo");
+      setPhase(null);
+      setPhaseMsg("");
     }
   }
 
   async function copyHtml(html: string) {
     try {
       const blobHtml = new Blob([html], { type: "text/html" });
-      const plain = stripHtml(html);
-      const blobTxt = new Blob([plain], { type: "text/plain" });
-      const item = new ClipboardItem({ "text/html": blobHtml, "text/plain": blobTxt });
+      const plain    = stripHtml(html);
+      const blobTxt  = new Blob([plain], { type: "text/plain" });
+      const item     = new ClipboardItem({ "text/html": blobHtml, "text/plain": blobTxt });
       await navigator.clipboard.write([item]);
     } catch {
       await navigator.clipboard.writeText(html);
@@ -190,13 +235,12 @@ setOriginal(json);
           {err}
         </Alert>
       )}
-      
+
       <div className="flex gap-10 w-full">
         <div className="flex-2">
           <form onSubmit={formik.handleSubmit} className="flex gap-8">
-            <div className="flex flex-col gap-4 flex-1">
 
-              {/* Full Name */}
+            <div className="flex flex-col gap-4 flex-1">
               <FormControl error={Boolean(formik.touched.fullName && formik.errors.fullName)}>
                 <FormLabel>Nombre completo</FormLabel>
                 <Input name="fullName" value={formik.values.fullName} onChange={formik.handleChange} onBlur={formik.handleBlur} />
@@ -205,7 +249,6 @@ setOriginal(json);
                 )}
               </FormControl>
 
-              {/* Title */}
               <FormControl error={Boolean(formik.touched.title && formik.errors.title)}>
                 <FormLabel>Cargo</FormLabel>
                 <Input name="title" value={formik.values.title} onChange={formik.handleChange} onBlur={formik.handleBlur} />
@@ -214,22 +257,14 @@ setOriginal(json);
                 )}
               </FormControl>
 
-              {/* Contact Lines */}
               <FormControl error={Boolean(formik.touched.contactLines && formik.errors.contactLines)}>
                 <FormLabel>Líneas de contacto</FormLabel>
-                <Textarea
-                  name="contactLines"
-                  minRows={2}
-                  value={formik.values.contactLines}
-                  onChange={formik.handleChange}
-                  onBlur={formik.handleBlur}
-                />
+                <Textarea name="contactLines" minRows={2} value={formik.values.contactLines} onChange={formik.handleChange} onBlur={formik.handleBlur} />
                 {formik.touched.contactLines && formik.errors.contactLines && (
                   <Typography level="body-xs" color="danger">{formik.errors.contactLines}</Typography>
                 )}
               </FormControl>
 
-              {/* Email */}
               <FormControl error={Boolean(formik.touched.email && formik.errors.email)}>
                 <FormLabel>Email</FormLabel>
                 <Input name="email" value={formik.values.email} onChange={formik.handleChange} onBlur={formik.handleBlur} />
@@ -238,42 +273,28 @@ setOriginal(json);
                 )}
               </FormControl>
 
-              {/* Address */}
               <FormControl error={Boolean(formik.touched.address && formik.errors.address)}>
                 <FormLabel>Dirección</FormLabel>
-                <Textarea
-                  name="address"
-                  minRows={2}
-                  value={formik.values.address}
-                  onChange={formik.handleChange}
-                  onBlur={formik.handleBlur}
-                />
+                <Textarea name="address" minRows={2} value={formik.values.address} onChange={formik.handleChange} onBlur={formik.handleBlur} />
                 {formik.touched.address && formik.errors.address && (
                   <Typography level="body-xs" color="danger">{formik.errors.address}</Typography>
                 )}
               </FormControl>
 
-              {/* LIC (opcional) */}
               <FormControl>
                 <FormLabel>LIC (opcional)</FormLabel>
-                <Input
-                  name="lic"
-                  placeholder="ej: LIC OK#108343"
-                  value={formik.values.lic}
-                  onChange={formik.handleChange}
-                  onBlur={formik.handleBlur}
-                />
+                <Input name="lic" placeholder="ej: LIC OK#108343" value={formik.values.lic} onChange={formik.handleChange} onBlur={formik.handleBlur} />
               </FormControl>
             </div>
-            <div className="flex flex-col gap-4 flex-1">
 
-              {/* Logo upload */}
+            <div className="flex flex-col gap-4 flex-1">
               <FormControl>
                 <FormLabel>Logo del agente (opcional)</FormLabel>
                 <label
                   onDragOver={handleDragOver}
                   onDrop={handleDrop}
-                  className="flex items-center justify-center w-full h-32 px-4 transition bg-white/4 border-2 border-gray-700 border-dashed rounded-md appearance-none cursor-pointer hover:border-accent focus:outline-none"
+                  style={{ cursor: isProcessing ? "not-allowed" : "pointer", opacity: isProcessing ? 0.6 : 1 }}
+                  className="flex items-center justify-center w-full h-32 px-4 transition bg-white/4 border-2 border-gray-700 border-dashed rounded-md appearance-none hover:border-accent focus:outline-none"
                 >
                   <div className="flex flex-col justify-center items-center w-full text-center">
                     <svg className="w-8 h-8 text-gray-400 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -290,34 +311,45 @@ setOriginal(json);
                     accept="image/*"
                     onChange={handleInputChange}
                     className="hidden"
-                    disabled={busyUpload}
+                    disabled={isProcessing}
                   />
                 </label>
               </FormControl>
 
-              <Typography level="title-md" sx={{ mt: 2 }}>
-                Logos
-              </Typography>
+              {phase && (
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
+                  {isProcessing && <CircularProgress size="sm" />}
+                  {phase === "perfect" && (
+                    <Chip color="success" variant="soft" size="sm">✓ Logo perfecto</Chip>
+                  )}
+                  {phase === "enhanced" && (
+                    <Chip color="primary" variant="soft" size="sm">✨ Mejorado con IA</Chip>
+                  )}
+                  <Typography level="body-xs" sx={{ opacity: 0.75 }}>
+                    {phaseMsg}
+                  </Typography>
+                </Box>
+              )}
+
+              <Typography level="title-md">Logos</Typography>
               <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
-                <LogoCard title="Original" data={original} smart />
-                <LogoCard title="Procesado" data={enhanced} />
+                {/* Original: muestra el archivo tal cual lo subió el usuario */}
+                <RawLogoCard title="Original" previewUrl={rawPreviewUrl} />
+                {/* Mejorado: resultado de OpenAI */}
+                <LogoCard title="Mejorado" data={enhanced} />
               </Box>
 
               <Stack direction="row" spacing={1} className="mt-4">
-                <Button variant="soft" onClick={handleEnhance} disabled={!original?.secure_url || busyEnhance}>
-                  {busyEnhance ? "Mejorando..." : "Mejorar con IA"}
-                </Button>
-                <Button type="submit" disabled={!formik.isValid || busyGenerate}>
-                  {busyGenerate ? "Generando..." : "Generar firma"}
+                <Button type="submit" disabled={!formik.isValid || busyGenerate || isProcessing}>
+                  {busyGenerate ? "Generando…" : "Generar firma"}
                 </Button>
               </Stack>
             </div>
           </form>
         </div>
+
         <div className="flex-1">
-          <Typography level="title-md" sx={{ mb: 1 }}>
-            Preview
-          </Typography>
+          <Typography level="title-md" sx={{ mb: 1 }}>Preview</Typography>
           <div className="bg-white p-8 rounded-lg">
             {signatureHtml ? (
               <div dangerouslySetInnerHTML={{ __html: signatureHtml }} />
@@ -327,7 +359,6 @@ setOriginal(json);
               </Typography>
             )}
           </div>
-
           {signatureHtml && (
             <Button variant="outlined" sx={{ mt: 1 }} onClick={() => copyHtml(signatureHtml)}>
               Copy Signature
@@ -339,44 +370,55 @@ setOriginal(json);
   );
 }
 
-function LogoCard({
-  title,
-  data,
-  smart = false,
-}: {
-  title: string;
-  data: UploadResult | null;
-  smart?: boolean;
-}) {
-  const size = smart ? getSmartLogoSize(data?.width, data?.height) : { w: 96, h: 96 };
+// ── RawLogoCard — muestra el archivo local sin ningún procesamiento ────────────
+
+function RawLogoCard({ title, previewUrl }: { title: string; previewUrl: string | null }) {
+  return (
+    <div className="bg-white/4 rounded-lg p-4">
+      <Typography level="title-sm" sx={{ mb: 1 }}>{title}</Typography>
+      <div className="flex flex-col gap-2 items-center justify-center min-h-[80px]">
+        {previewUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={previewUrl}
+            alt={title}
+            style={{ maxWidth: "100%", maxHeight: 120, objectFit: "contain" }}
+          />
+        ) : (
+          <Typography level="body-xs" sx={{ opacity: 0.5 }}>Sin imagen</Typography>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── LogoCard — muestra el resultado procesado por OpenAI ──────────────────────
+
+function LogoCard({ title, data }: { title: string; data: UploadResult | null }) {
+  const w      = data?.width  ?? 96;
+  const h      = data?.height ?? 96;
+  const imgUrl = data?.display_url || data?.secure_url || null;
 
   return (
     <div className="bg-white/4 rounded-lg p-4">
-      <Typography level="title-sm" sx={{ mb: 1 }}>
-        {title}
-      </Typography>
-
-      {/* Quitamos el aspect fijo para que el logo pueda tener su tamaño real */}
-      <div className="flex flex-col gap-2 items-center justify-center">
-        {data?.secure_url ? (
+      <Typography level="title-sm" sx={{ mb: 1 }}>{title}</Typography>
+      <div className="flex flex-col gap-2 items-center justify-center min-h-[80px]">
+        {imgUrl ? (
           <>
             <Image
-              src={data.secure_url}
+              src={imgUrl}
               alt={title}
-              width={size.w}
-              height={size.h}
-              style={{ width: size.w, height: size.h, objectFit: "contain" }}
+              width={w}
+              height={h}
+              style={{ width: w, height: h, objectFit: "contain" }}
             />
-
             <Typography level="body-xs" sx={{ opacity: 0.8 }}>
-              {data.width}×{data.height} • {Math.round((data.bytes ?? 0) / 1024)} KB • {data.format}
-              {smart ? ` • render ${size.w}×${size.h}` : ""}
+              {w}×{h}px • {Math.round((data?.bytes ?? 0) / 1024)} KB • {data?.format}
+              {data?.trimmed_ar ? ` • AR ${data.trimmed_ar.toFixed(2)}` : ""}
             </Typography>
           </>
         ) : (
-          <Typography level="body-xs" sx={{ opacity: 0.8 }}>
-            Sin imagen
-          </Typography>
+          <Typography level="body-xs" sx={{ opacity: 0.5 }}>Sin imagen</Typography>
         )}
       </div>
     </div>

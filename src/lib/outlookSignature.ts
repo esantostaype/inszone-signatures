@@ -1,11 +1,17 @@
+// src/lib/outlookSignature.ts
 export type SignatureInput = {
   fullName: string;
   title: string;
-  contactLines: string; // Phone, Fax, Direct, Cell, etc. — un campo textarea con saltos de línea
+  contactLines: string;
   email: string;
-  address: string;      // acepta saltos de línea
-  lic?: string;         // opcional
+  address: string;
+  lic?: string;
+  /** URL procesada por Cloudinary (con trim + transparencia + resize) */
   userLogoUrl?: string;
+  /** Ancho visual del logo — viene del upload response (box.w) */
+  userLogoWidth?: number;
+  /** Alto visual del logo — viene del upload response (box.h) */
+  userLogoHeight?: number;
 };
 
 function esc(s: string) {
@@ -41,19 +47,19 @@ export function buildOutlookSignatureHtml(input: SignatureInput) {
       <p style="margin:0;color:#364153;">${title}</p>
       <p style="margin:12px 0 0;color:#364153;">
         ${contactLines}<br>
-        <a href="mailto:${email}" style="color:#6F8CC0; text-decoration: underline">${email}</a>
+        <a href="mailto:${email}" style="color:#6F8CC0;text-decoration:underline">${email}</a>
       </p>
       <p style="margin:12px 0 0;color:#364153;">${address}</p>
       ${lic ? `<p style="margin:12px 0 0;letter-spacing:1.5pt;">${lic}</p>` : ""}
       <p style="margin:12px 0 0;">
-        <a href="https://www.facebook.com/InszoneInsuranceServices/" target="_blank" style="display: inline; text-decoration: none;">
-          <img src="https://inszoneinsurance.com/wp-content/uploads/2026/02/facebook.png" alt="Facebook" style="display: inline">
+        <a href="https://www.facebook.com/InszoneInsuranceServices/" target="_blank" style="display:inline;text-decoration:none;">
+          <img src="https://inszoneinsurance.com/wp-content/uploads/2026/02/facebook.png" alt="Facebook" style="display:inline">
         </a>
-        <a href="https://twitter.com/InszoneIns" target="_blank" style="display: inline; text-decoration: none;">
-          <img src="https://inszoneinsurance.com/wp-content/uploads/2026/02/twitter.png" alt="Twitter" style="display: inline">
+        <a href="https://twitter.com/InszoneIns" target="_blank" style="display:inline;text-decoration:none;">
+          <img src="https://inszoneinsurance.com/wp-content/uploads/2026/02/twitter.png" alt="Twitter" style="display:inline">
         </a>
-        <a href="https://www.linkedin.com/company/inszone-insurance-services-inc-" target="_blank" style="display: inline; text-decoration: none;">
-          <img src="https://inszoneinsurance.com/wp-content/uploads/2026/02/linkedin.png" alt="Linkedin" style="display: inline">
+        <a href="https://www.linkedin.com/company/inszone-insurance-services-inc-" target="_blank" style="display:inline;text-decoration:none;">
+          <img src="https://inszoneinsurance.com/wp-content/uploads/2026/02/linkedin.png" alt="Linkedin" style="display:inline">
         </a>
       </p>
     </td>
@@ -61,9 +67,11 @@ export function buildOutlookSignatureHtml(input: SignatureInput) {
     <!-- RIGHT COLUMN -->
     <td valign="top" style="padding-left:16px;">
       <p style="margin:0;text-align:center;">
-        ${userLogoUrl ? `<img src="${userLogoUrl}" width="64" height="64" alt="Partner" style="display: inline">` : ""}
+        ${userLogoUrl
+          ? `<img src="${userLogoUrl}" alt="Partner" style="display:block;margin:0 auto 6px;">`
+          : ""}
         <span style="display:block;margin:0 0 8px;color:#6F8CC0;font-weight:bold;">powered by</span>
-        <img src="https://inszoneinsurance.com/wp-content/uploads/2026/01/logo-inszone.png" alt="Inszone Insurance" style="display: inline">
+        <img src="https://inszoneinsurance.com/wp-content/uploads/2026/01/logo-inszone.png" alt="Inszone Insurance" style="display:inline">
       </p>
       <p style="margin:16px 0 8px;">
         <a href="https://inszoneinsurance.com/" target="_blank" style="color:#6F8CC0;">INSZONEINSURANCE.COM</a>

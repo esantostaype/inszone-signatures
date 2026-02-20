@@ -1,93 +1,198 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // src/lib/logoSmart.ts
 import sharp from "sharp";
-import { cloudinary } from "./cloudinary";
-
-export type UploadMeta = {
-  public_id: string;
-  secure_url: string;
-  width: number;
-  height: number;
-  bytes?: number;
-  format?: string;
-};
 
 export type SmartPlan =
   | { kind: "HAS_ALPHA" }
-  | { kind: "SOLID_BG"; bgHex: string }
+  | { kind: "SOLID_BG"; bgHex: string; bgR: number; bgG: number; bgB: number }
   | { kind: "COMPLEX_BG" };
 
 export type LogoBox = { w: number; h: number };
 
-function clamp(n: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, n));
+export type SmartLogoResult = {
+  plan: SmartPlan;
+  trimmedAr: number;
+  box: LogoBox;
+  /** Buffer procesado (fondo removido + trimmed) listo para subir a Cloudinary */
+  processedBuffer: Buffer;
+};
+
+/** Tamaño visual según AR real del logo (post-trim) */
+export function getSmartLogoBox(ar: number): LogoBox {
+  let w: number;
+
+  if (ar < 0.85)                w = 40;  // vertical
+  else if (ar <= 1.18)          w = 64;  // ~1:1
+  else if (ar <= 1.7)           w = 88;  // ~3:2
+  else if (ar <= 2.4)           w = 96;  // ~2:1
+  else if (ar <= 3.4)           w = 106; // ~3:1
+  else if (ar <= 4.4)           w = 114; // ~4:1
+  else if (ar <= 5.4)           w = 122; // ~5:1
+  else if (ar <= 6.4)           w = 130; // ~6:1
+  else if (ar <= 7.4)           w = 138; // ~7:1
+  else if (ar <= 8.4)           w = 146; // ~8:1
+  else if (ar <= 9.4)           w = 154; // ~9:1
+  else                          w = 160; // ~10:1+
+
+  // Alto calculado del AR real — nunca forzado
+  const h = Math.round(w / ar);
+
+  return { w, h };
 }
 
 /**
- * Tu regla de tamaños (solo UI, NO redimensiona el archivo en Cloudinary).
+ * Elimina fondo de color sólido píxel a píxel con sharp.
+ * 100% local, 100% gratis — no necesita Cloudinary AI ni APIs externas.
+ *
+ * Usa distancia euclidiana en espacio RGB para comparar cada píxel
+ * contra el color detectado en las esquinas.
  */
-export function getSmartLogoBox(srcW?: number, srcH?: number): LogoBox {
-  if (!srcW || !srcH) return { w: 64, h: 64 };
-  const ar = srcW / srcH;
+async function removeSolidBackground(
+  buffer: Buffer,
+  bgR: number,
+  bgG: number,
+  bgB: number,
+  tolerance = 40
+): Promise<Buffer> {
+  const { data, info } = await sharp(buffer, { failOn: "none" })
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
 
-  if (ar >= 0.9 && ar <= 1.1) return { w: 64, h: 64 };      // ~1:1
-  if (ar > 1.1 && ar <= 2.3) return { w: 90, h: 45 };       // ~2:1
-  if (ar > 2.3 && ar <= 3.6) return { w: 110, h: 35 };      // ~3:1
+  const pixels = new Uint8ClampedArray(data);
+  const totalPixels = info.width * info.height;
 
-  if (ar < 0.9) return { w: 45, h: 90 };                    // vertical
+  for (let i = 0; i < totalPixels; i++) {
+    const idx = i * 4;
+    const r = pixels[idx];
+    const g = pixels[idx + 1];
+    const b = pixels[idx + 2];
 
-  // fallback ratios raros
-  const maxW = 140;
-  const minH = 28;
-  const maxH = 96;
-  const h = clamp(Math.round(maxW / ar), minH, maxH);
-  return { w: maxW, h };
+    // Distancia euclidiana RGB al color de fondo
+    const diff = Math.sqrt(
+      (r - bgR) ** 2 +
+      (g - bgG) ** 2 +
+      (b - bgB) ** 2
+    );
+
+    if (diff <= tolerance) {
+      pixels[idx + 3] = 0; // transparente
+    }
+  }
+
+  return sharp(Buffer.from(pixels.buffer), {
+    raw: { width: info.width, height: info.height, channels: 4 },
+  })
+    .png()
+    .toBuffer();
 }
 
 /**
- * Analiza el archivo subido y decide automáticamente el plan:
- * - Si tiene alpha => HAS_ALPHA
- * - Si no tiene alpha y el fondo se ve sólido (por esquinas) => SOLID_BG con hex
- * - Si no => COMPLEX_BG (intenta AI bg removal si está disponible)
+ * Pipeline completo:
+ * 1. Detecta plan (alpha / fondo sólido / fondo complejo)
+ * 2. Remueve el fondo localmente con sharp (gratis)
+ * 3. Hace trim para quitar bordes vacíos
+ * 4. Calcula el AR real del logo (sin canvas vacío)
+ * 5. Devuelve buffer PNG procesado listo para subir
  */
-export async function detectSmartPlan(fileBuffer: Buffer): Promise<SmartPlan> {
-  // 1) Detectar alpha
+export async function analyzeLogoBuffer(fileBuffer: Buffer): Promise<SmartLogoResult> {
   const img = sharp(fileBuffer, { failOn: "none" });
   const meta = await img.metadata();
   const hasAlpha = Boolean(meta.hasAlpha);
 
-  if (hasAlpha) return { kind: "HAS_ALPHA" };
+  let plan: SmartPlan;
+  let processedBuffer: Buffer;
 
-  // 2) Si no hay alpha, inspecciona “color de fondo” por esquinas
-  //    (si el logo está centrado o abajo, igual las esquinas suelen ser fondo)
-  const { data, info } = await img
-    .ensureAlpha() // agrega canal alpha (opaco) para simplificar lectura RGBA
-    .raw()
-    .toBuffer({ resolveWithObject: true });
+  if (hasAlpha) {
+    // Ya tiene canal alpha — solo hacemos trim
+    plan = { kind: "HAS_ALPHA" };
+    processedBuffer = await sharp(fileBuffer, { failOn: "none" })
+      .trim({ threshold: 20 })
+      .png()
+      .toBuffer();
 
-  const w = info.width;
-  const h = info.height;
+  } else {
+    // Sin alpha — detectar color de fondo por esquinas
+    const { data, info } = await img
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
 
-  const corners = [
-    getPixelRGBA(data, w, 0, 0),           // top-left
-    getPixelRGBA(data, w, w - 1, 0),       // top-right
-    getPixelRGBA(data, w, 0, h - 1),       // bottom-left
-    getPixelRGBA(data, w, w - 1, h - 1),   // bottom-right
-  ];
+    const w = info.width;
+    const h = info.height;
 
-  // Si las esquinas son MUY parecidas => fondo sólido
-  const solid = cornersSimilar(corners, 18); // tolerancia (0-255). Sube/baja si quieres.
+    const corners = [
+      getPixel(data, w, 0,     0    ),
+      getPixel(data, w, w - 1, 0    ),
+      getPixel(data, w, 0,     h - 1),
+      getPixel(data, w, w - 1, h - 1),
+    ];
 
-  if (solid) {
-    const avg = averageRGBA(corners);
-    const bgHex = rgbToHex(avg.r, avg.g, avg.b);
-    return { kind: "SOLID_BG", bgHex };
+    if (cornersSimilar(corners, 18)) {
+      // ✅ Fondo sólido → remover gratis con sharp
+      const avg = averageRGBA(corners);
+      plan = {
+        kind:  "SOLID_BG",
+        bgHex: rgbToHex(avg.r, avg.g, avg.b),
+        bgR:   avg.r,
+        bgG:   avg.g,
+        bgB:   avg.b,
+      };
+
+      const withoutBg = await removeSolidBackground(
+        fileBuffer,
+        avg.r, avg.g, avg.b,
+        40 // tolerancia: sube si quedan restos de fondo, baja si se come el logo
+      );
+
+      processedBuffer = await sharp(withoutBg, { failOn: "none" })
+        .trim({ threshold: 10 })
+        .png()
+        .toBuffer();
+
+    } else {
+      // Fondo complejo (foto, gradiente, etc.)
+      // Subimos el original; el usuario puede usar "Mejorar con IA" para esto
+      plan = { kind: "COMPLEX_BG" };
+      processedBuffer = await sharp(fileBuffer, { failOn: "none" })
+        .trim({ threshold: 20 })
+        .png()
+        .toBuffer();
+    }
   }
 
-  return { kind: "COMPLEX_BG" };
+  // Calcular AR real del buffer procesado (ya sin bordes vacíos)
+  const processedMeta = await sharp(processedBuffer).metadata();
+  const tw = processedMeta.width  ?? meta.width  ?? 1;
+  const th = processedMeta.height ?? meta.height ?? 1;
+  const trimmedAr = tw / th;
+
+  return {
+    plan,
+    trimmedAr,
+    box: getSmartLogoBox(trimmedAr),
+    processedBuffer,
+  };
 }
 
-function getPixelRGBA(raw: Buffer, width: number, x: number, y: number) {
+/**
+ * URL de Cloudinary simple — el procesamiento ya se hizo localmente.
+ * Solo aplica resize final manteniendo AR.
+ */
+export function buildSmartDisplayUrl(args: {
+  cloudName: string;
+  publicId: string;
+  box: LogoBox;
+}): string {
+  const { cloudName, publicId, box } = args;
+  // f_png: forzar PNG para preservar transparencia (no webp que puede perderla en Outlook)
+  const transformation = `c_fit,w_${box.w},h_${box.h}/f_png,q_auto`;
+  return `https://res.cloudinary.com/${cloudName}/image/upload/${transformation}/${publicId}`;
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+function getPixel(raw: Buffer, width: number, x: number, y: number) {
   const idx = (y * width + x) * 4;
   return { r: raw[idx], g: raw[idx + 1], b: raw[idx + 2], a: raw[idx + 3] };
 }
@@ -122,65 +227,9 @@ function averageRGBA(px: Array<{ r: number; g: number; b: number; a: number }>) 
 }
 
 function rgbToHex(r: number, g: number, b: number) {
-  const to2 = (n: number) => n.toString(16).padStart(2, "0");
-  return `${to2(r)}${to2(g)}${to2(b)}`;
-}
-
-/**
- * Genera URL “display” para tu card.
- *
- * Incluye:
- * - Trim para recortar aire: e_trim
- * - Si NO alpha y fondo sólido => e_make_transparent (por color) + trim
- * - Si fondo complejo => intenta AI bg removal + trim (si tu cuenta lo soporta)
- *
- * Importante:
- * - Esto NO “elige logo”; es automático.
- * - Si AI bg removal no está habilitado, el asset igual se verá (solo sin remover fondo).
- */
-export function buildSmartDisplayUrl(args: {
-  cloudName: string;
-  publicId: string;
-  srcW?: number;
-  srcH?: number;
-  plan: SmartPlan;
-  canvas?: "fit" | "pad"; // fit recomendado; pad si quieres tamaño exacto
-}) {
-  const { cloudName, publicId, srcW, srcH, plan, canvas = "fit" } = args;
-  const box = getSmartLogoBox(srcW, srcH);
-
-  const t: Array<Record<string, any>> = [];
-
-  // 1) Normalización de formato/calidad (mantiene alpha cuando exista)
-  t.push({ fetch_format: "auto", quality: "auto" });
-
-  // 2) Remover fondo si aplica
-  if (plan.kind === "SOLID_BG") {
-    // Hace transparente el color del fondo detectado.
-    // Nota: en Cloudinary, el color suele ir como "rgb:ffffff" o "FFFFFF"
-    t.push({ effect: `make_transparent:${plan.bgHex}` });
-  } else if (plan.kind === "COMPLEX_BG") {
-    // Intento de AI Background Removal (si tu cuenta lo tiene habilitado).
-    // Si no lo tienes, Cloudinary puede devolver error si lo llamas como transformación.
-    // Por eso, abajo te doy un handler server-side que lo intenta y hace fallback.
-    t.push({ effect: "background_removal" });
-  }
-
-  // 3) Recorta bordes vacíos (sirve para “logo pequeño centrado” o “logo abajo con aire arriba”)
-  t.push({ effect: "trim" });
-
-  // 4) Ajuste final al tamaño visual que quieres
-  if (canvas === "pad") {
-    t.push({ crop: "pad", background: "transparent", width: box.w, height: box.h });
-  } else {
-    t.push({ crop: "fit", width: box.w, height: box.h });
-  }
-
-  // Construye URL con SDK (para evitar string manual)
-  // OJO: necesitas cloudinary.v2.url. Aquí usamos cloudinary.url.
-  return cloudinary.url(publicId, {
-    secure: true,
-    cloud_name: cloudName,
-    transformation: t,
-  });
+  return (
+    r.toString(16).padStart(2, "0") +
+    g.toString(16).padStart(2, "0") +
+    b.toString(16).padStart(2, "0")
+  );
 }
