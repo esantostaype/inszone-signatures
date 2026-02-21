@@ -3,29 +3,13 @@
 import { NextResponse } from "next/server";
 import { cloudinary } from "@/lib/cloudinary";
 import sharp from "sharp";
+import { getSmartLogoBox, addWhiteBackgroundAndPadding } from "@/lib/logoSmart";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const MAX_AI_PX = 640;
-
-function getSmartLogoBox(ar: number): { w: number; h: number } {
-  let w: number;
-  if (ar < 0.85)       w = 40;
-  else if (ar <= 1.18) w = 64;
-  else if (ar <= 1.7)  w = 88;
-  else if (ar <= 2.4)  w = 96;
-  else if (ar <= 3.4)  w = 106;
-  else if (ar <= 4.4)  w = 114;
-  else if (ar <= 5.4)  w = 122;
-  else if (ar <= 6.4)  w = 130;
-  else if (ar <= 7.4)  w = 138;
-  else if (ar <= 8.4)  w = 146;
-  else if (ar <= 9.4)  w = 154;
-  else                 w = 160;
-  const h = Math.round(w / ar);
-  return { w, h };
-}
+const PADDING   = 20;
 
 async function preprocessForAI(buffer: Buffer): Promise<Buffer> {
   const trimmed = await sharp(buffer, { failOn: "none" })
@@ -46,64 +30,6 @@ async function preprocessForAI(buffer: Buffer): Promise<Buffer> {
     .toBuffer();
 }
 
-/**
- * Fuerza transparencia si OpenAI dejó fondo blanco/gris.
- * Solo actúa si las esquinas son claras y opacas.
- */
-async function forceTransparency(buffer: Buffer): Promise<Buffer> {
-  const { data, info } = await sharp(buffer, { failOn: "none" })
-    .ensureAlpha()
-    .raw()
-    .toBuffer({ resolveWithObject: true });
-
-  const pixels = new Uint8ClampedArray(data);
-  const w = info.width;
-  const h = info.height;
-
-  const corners = [
-    getPixelAt(pixels, w, 0,     0    ),
-    getPixelAt(pixels, w, w - 1, 0    ),
-    getPixelAt(pixels, w, 0,     h - 1),
-    getPixelAt(pixels, w, w - 1, h - 1),
-  ];
-  const avgBg = average(corners);
-  const isSolidBg = avgBg.a > 200 && avgBg.r > 160 && avgBg.g > 160 && avgBg.b > 160;
-
-  if (isSolidBg) {
-    const total = w * h;
-    for (let i = 0; i < total; i++) {
-      const idx = i * 4;
-      const dist = Math.sqrt(
-        (pixels[idx]     - avgBg.r) ** 2 +
-        (pixels[idx + 1] - avgBg.g) ** 2 +
-        (pixels[idx + 2] - avgBg.b) ** 2
-      );
-      if (dist <= 45) pixels[idx + 3] = 0;
-    }
-  }
-
-  return sharp(Buffer.from(pixels.buffer), {
-    raw: { width: w, height: h, channels: 4 },
-  }).png().toBuffer();
-}
-
-function getPixelAt(px: Uint8ClampedArray, width: number, x: number, y: number) {
-  const idx = (y * width + x) * 4;
-  return { r: px[idx], g: px[idx + 1], b: px[idx + 2], a: px[idx + 3] };
-}
-
-function average(px: Array<{ r: number; g: number; b: number; a: number }>) {
-  const s = px.reduce(
-    (a, p) => ({ r: a.r + p.r, g: a.g + p.g, b: a.b + p.b, a: a.a + p.a }),
-    { r: 0, g: 0, b: 0, a: 0 }
-  );
-  const n = px.length;
-  return {
-    r: Math.round(s.r / n), g: Math.round(s.g / n),
-    b: Math.round(s.b / n), a: Math.round(s.a / n),
-  };
-}
-
 // ── Handler ───────────────────────────────────────────────────────────────────
 
 export async function POST(req: Request) {
@@ -121,32 +47,22 @@ export async function POST(req: Request) {
     }
     const rawBuf = Buffer.from(await imgRes.arrayBuffer());
 
-    // 2) Pre-procesar: trim agresivo + escalar a máx 640px
+    // 2) Pre-procesar para AI: trim + escalar a máx 640px
     const aiBuf = await preprocessForAI(rawBuf);
 
-    // 3) OpenAI: mejorar logo + fondo transparente + borde blanco de forma
+    // 3) OpenAI: mejorar calidad del logo manteniendo diseño exacto
     const prompt = `
-You are a professional graphic designer. Your task is to process this company logo image. Follow every instruction EXACTLY:
+You are a professional graphic designer. Your ONLY task is to recreate this logo with higher quality.
 
-STEP 1 - BACKGROUND REMOVAL:
-Remove ONLY the background (areas outside the logo). The background must become fully transparent (PNG alpha = 0). Do not touch anything inside or touching the logo.
+STRICT RULES:
+1. Keep EXACTLY the same design, colors, text, fonts, layout, and proportions as the original
+2. Make the image sharper and cleaner — crisp edges, no blur, no pixelation
+3. The output background must be solid WHITE (#FFFFFF)
+4. Do NOT add any padding or border — just the logo with white background
+5. Do NOT change any colors, add effects, shadows, or modify the design in any way
+6. Output a clean, high-resolution PNG
 
-STEP 2 - PRESERVE EVERYTHING:
-Keep ALL of the following exactly as they are in the original:
-- Every color: reds, blacks, grays, whites inside the logo
-- All colored rectangles or boxes that are part of the logo design (red background behind text, dark background behind "Agency Inc." — keep them)
-- All text exactly as written with original font, weight and color
-- All shapes: diamonds, arrows, geometric forms
-- Do NOT recolor, reinterpret, or stylize anything
-
-STEP 3 - QUALITY:
-If the image is blurry or pixelated, sharpen it. Produce crisp, clean edges.
-
-STEP 4 - WHITE STROKE BORDER:
-Add a white outline stroke of exactly 4 pixels thickness that follows the exact silhouette/shape of every logo element. The stroke must wrap tightly around: the diamond shapes, the text boxes, the colored rectangles — every visible element. The stroke must NOT be rectangular. It must follow the natural contour of each shape.
-
-STEP 5 - OUTPUT FORMAT:
-Output a transparent PNG. Tight crop — minimal empty space around the logo.
+The result must look exactly like the original logo, just at higher quality.
 `.trim();
 
     const form = new FormData();
@@ -175,21 +91,21 @@ Output a transparent PNG. Tight crop — minimal empty space around the logo.
 
     const enhancedBuf = Buffer.from(b64, "base64");
 
-    // 4) Fallback: forzar transparencia si OpenAI dejó fondo sólido
-    const transparent = await forceTransparency(enhancedBuf);
-
-    // 5) Trim final
-    const finalBuf = await sharp(transparent, { failOn: "none" })
-      .trim({ threshold: 10 })
+    // 4) Trim del resultado de AI
+    const trimmed = await sharp(enhancedBuf, { failOn: "none" })
+      .trim({ threshold: 15 })
       .png()
       .toBuffer();
 
-    // 6) Calcular AR y box inteligente
-    const finalMeta = await sharp(finalBuf).metadata();
-    const fw  = finalMeta.width  ?? 1;
-    const fh  = finalMeta.height ?? 1;
-    const ar  = fw / fh;
+    // 5) Calcular AR del logo antes del padding
+    const trimmedMeta = await sharp(trimmed).metadata();
+    const tw = trimmedMeta.width  ?? 1;
+    const th = trimmedMeta.height ?? 1;
+    const ar = tw / th;
     const box = getSmartLogoBox(ar);
+
+    // 6) Agregar fondo blanco + 20px de padding
+    const finalBuf = await addWhiteBackgroundAndPadding(trimmed, PADDING);
 
     // 7) Subir a Cloudinary
     const uploadResult = await new Promise<any>((resolve, reject) => {

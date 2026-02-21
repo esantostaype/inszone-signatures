@@ -15,18 +15,22 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "No file" }, { status: 400 });
     }
 
-    const buffer = Buffer.from(await file.arrayBuffer());
+    const buffer   = Buffer.from(await file.arrayBuffer());
+    const mimeType = file.type || "";
 
-    // 1) Analizar + procesar localmente (remover fondo, trim, calcular AR)
-    const { plan, trimmedAr, box, processedBuffer } = await analyzeLogoBuffer(buffer);
+    // 1) Analizar + procesar localmente
+    //    - SVG: rasteriza directamente, skipEnhancement = true
+    //    - Otros: remueve fondo, trim, agrega fondo blanco + 20px padding
+    const { plan, trimmedAr, box, processedBuffer, skipEnhancement } =
+      await analyzeLogoBuffer(buffer, mimeType);
 
-    // 2) Subir el buffer YA PROCESADO a Cloudinary (PNG con transparencia)
+    // 2) Subir el buffer procesado a Cloudinary (PNG con fondo blanco)
     const uploadResult = await new Promise<any>((resolve, reject) => {
       cloudinary.uploader.upload_stream(
         {
-          folder: "logos",
+          folder:        "logos",
           resource_type: "image",
-          format: "png", // forzar PNG para preservar alpha
+          format:        "png",
         },
         (err, result) => (err ? reject(err) : resolve(result))
       ).end(processedBuffer);
@@ -34,7 +38,7 @@ export async function POST(req: Request) {
 
     const cloudName = process.env.CLOUDINARY_CLOUD_NAME!;
 
-    // 3) URL con resize inteligente (sin transformaciones de fondo — ya está limpio)
+    // 3) URL con resize inteligente
     const displayUrl = buildSmartDisplayUrl({
       cloudName,
       publicId: uploadResult.public_id,
@@ -42,15 +46,16 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json({
-      public_id:   uploadResult.public_id,
-      secure_url:  uploadResult.secure_url,  // original procesado sin resize
-      display_url: displayUrl,               // ← usar esta en la firma y preview
-      width:       box.w,                    // ← ancho visual correcto para el HTML
-      height:      box.h,                    // ← alto visual correcto para el HTML
-      trimmed_ar:  trimmedAr,
-      bytes:       uploadResult.bytes,
-      format:      "png",
+      public_id:        uploadResult.public_id,
+      secure_url:       uploadResult.secure_url,
+      display_url:      displayUrl,
+      width:            box.w,
+      height:           box.h,
+      trimmed_ar:       trimmedAr,
+      bytes:            uploadResult.bytes,
+      format:           "png",
       plan,
+      skipEnhancement,  // ← true para SVG y otros casos donde no se necesita AI
     });
 
   } catch (e: any) {

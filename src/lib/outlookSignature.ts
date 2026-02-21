@@ -6,7 +6,7 @@ export type SignatureInput = {
   email: string;
   address: string;
   lic?: string;
-  /** URL procesada por Cloudinary (con trim + transparencia + resize) */
+  /** URL procesada por Cloudinary (con fondo blanco + padding + resize) */
   userLogoUrl?: string;
   /** Ancho visual del logo — viene del upload response (box.w) */
   userLogoWidth?: number;
@@ -35,6 +35,8 @@ export function buildOutlookSignatureHtml(input: SignatureInput) {
   const address      = nl2br((input.address ?? "").trim());
   const lic          = input.lic ? esc(input.lic.trim()) : "";
   const userLogoUrl  = input.userLogoUrl ?? "";
+  const logoW        = input.userLogoWidth  ?? 96;
+  const logoH        = input.userLogoHeight ?? 96;
 
   return `
 <!-- START SIGNATURE -->
@@ -68,13 +70,13 @@ export function buildOutlookSignatureHtml(input: SignatureInput) {
     <td valign="top" style="padding-left:16px;">
       <p style="margin:0;text-align:center;">
         ${userLogoUrl
-          ? `<img src="${userLogoUrl}" alt="Partner" style="display:block;margin:0 auto 6px;">`
+          ? `<img src="${userLogoUrl}" alt="Partner" width="${logoW}" height="${logoH}" style="display:block;margin:0 auto 6px;width:${logoW}px;height:${logoH}px;object-fit:contain;">`
           : ""}
         <span style="display:block;margin:0 0 8px;color:#6F8CC0;font-weight:bold;">powered by</span>
         <img src="https://inszoneinsurance.com/wp-content/uploads/2026/01/logo-inszone.png" alt="Inszone Insurance" style="display:inline">
       </p>
       <p style="margin:16px 0 8px;">
-        <a href="https://inszoneinsurance.com/" target="_blank" style="color:#6F8CC0;">INSZONEINSURANCE.COM</a>
+        <a href="https://inszoneinsurance.com/" target="_blank" style="color:#6F8CC0;text-decoration:underline;">INSZONEINSURANCE.COM</a>
       </p>
       <p style="margin:0;letter-spacing:1.5pt;">LIC #0F82764</p>
     </td>

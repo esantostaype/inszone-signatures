@@ -18,18 +18,20 @@ import CircularProgress from "@mui/joy/CircularProgress";
 import Chip from "@mui/joy/Chip";
 import { MainTitle } from "@/components/MainTitle";
 import Image from "next/image";
+import { SignatureIcon } from "@hugeicons/core-free-icons";
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
 type UploadResult = {
-  public_id:   string;
-  secure_url:  string;
-  display_url: string;
-  width:       number;
-  height:      number;
-  bytes:       number;
-  format:      string;
-  trimmed_ar?: number;
+  public_id:       string;
+  secure_url:      string;
+  display_url:     string;
+  width:           number;
+  height:          number;
+  bytes:           number;
+  format:          string;
+  trimmed_ar?:     number;
+  skipEnhancement?: boolean;
 };
 
 type LogoPhase =
@@ -54,23 +56,22 @@ const schema = Yup.object({
 // ── Página ─────────────────────────────────────────────────────────────────────
 
 export default function OutlookSignaturePage() {
-  const [original,         setOriginal]         = React.useState<UploadResult | null>(null);
-  const [enhanced,         setEnhanced]         = React.useState<UploadResult | null>(null);
-  // URL local del archivo que subió el usuario — sin ningún procesamiento
-  const [rawPreviewUrl,    setRawPreviewUrl]    = React.useState<string | null>(null);
-  const [signatureHtml,    setSignatureHtml]    = React.useState("");
-  const [busyGenerate,     setBusyGenerate]     = React.useState(false);
-  const [err,              setErr]              = React.useState<string>("");
-  const [phase,            setPhase]            = React.useState<LogoPhase>(null);
-  const [phaseMsg,         setPhaseMsg]         = React.useState<string>("");
+  const [original,      setOriginal]      = React.useState<UploadResult | null>(null);
+  const [enhanced,      setEnhanced]      = React.useState<UploadResult | null>(null);
+  const [rawPreviewUrl, setRawPreviewUrl] = React.useState<string | null>(null);
+  const [signatureHtml, setSignatureHtml] = React.useState("");
+  const [busyGenerate,  setBusyGenerate]  = React.useState(false);
+  const [err,           setErr]           = React.useState<string>("");
+  const [phase,         setPhase]         = React.useState<LogoPhase>(null);
+  const [phaseMsg,      setPhaseMsg]      = React.useState<string>("");
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
+  // El logo activo: si hay versión mejorada la usamos, si no la original
   const activeLogo   = enhanced ?? original;
   const userLogoUrl  = activeLogo?.display_url || "";
   const isProcessing = phase === "uploading" || phase === "analyzing" || phase === "enhancing";
 
-  // Limpiar objectURL al desmontar o al cambiar de imagen
   React.useEffect(() => {
     return () => {
       if (rawPreviewUrl) URL.revokeObjectURL(rawPreviewUrl);
@@ -140,12 +141,12 @@ export default function OutlookSignaturePage() {
     setPhase("uploading");
     setPhaseMsg("Subiendo logo…");
 
-    // ✅ Crear URL local del archivo original ANTES de cualquier procesamiento
     if (rawPreviewUrl) URL.revokeObjectURL(rawPreviewUrl);
     setRawPreviewUrl(URL.createObjectURL(file));
 
     try {
-      // PASO 1: Upload a Cloudinary + sharp (para calcular AR y display_url)
+      // PASO 1: Upload a Cloudinary
+      // El servidor ya aplica: remoción de fondo + trim + fondo blanco + 20px padding
       const fd = new FormData();
       fd.append("file", file);
 
@@ -162,29 +163,42 @@ export default function OutlookSignaturePage() {
       const uploadJson: UploadResult = JSON.parse(uploadText);
       setOriginal(uploadJson);
 
-      // PASO 2: Analizar con GPT-4o Vision
+      // Si es SVG u otro caso que no necesita análisis → terminamos aquí
+      if (uploadJson.skipEnhancement) {
+        setPhase("perfect");
+        setPhaseMsg(
+          uploadJson.format === "svg"
+            ? "SVG convertido a PNG con fondo blanco ✓"
+            : "Logo listo ✓"
+        );
+        return;
+      }
+
+      // PASO 2: Analizar calidad con GPT-4o Vision
       setPhase("analyzing");
       setPhaseMsg("Analizando calidad del logo con IA…");
 
       const analyzeRes  = await fetch("/api/outlook-signature/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageUrl: uploadJson.display_url }),
+        body: JSON.stringify({ imageUrl: uploadJson.secure_url }),
       });
       const analyzeJson = await analyzeRes.json();
-      const needsWork: boolean = analyzeJson?.needsWork ?? true;
+      const needsWork: boolean = analyzeJson?.needsWork ?? false;
       const reason: string     = analyzeJson?.reason    ?? "";
 
       if (!needsWork) {
+        // Logo de buena calidad → usar el procesado del upload (ya tiene fondo blanco + padding)
         setPhase("perfect");
-        setPhaseMsg(reason);
+        setPhaseMsg(reason || "Logo de buena calidad ✓");
         return;
       }
 
-      // PASO 3: Mejorar con GPT image generation
+      // PASO 3: Mejorar calidad con GPT image generation
       setPhase("enhancing");
-      setPhaseMsg(reason + " — generando logo mejorado…");
+      setPhaseMsg((reason || "Calidad insuficiente") + " — generando versión mejorada…");
 
+      // Enviamos la secure_url (imagen con fondo blanco procesada) para que AI mejore calidad
       const enhanceRes  = await fetch("/api/outlook-signature/enhance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -195,8 +209,7 @@ export default function OutlookSignaturePage() {
 
       setEnhanced({
         ...enhanceJson,
-        width:  uploadJson.width,
-        height: uploadJson.height,
+        // Los width/height vienen del enhance con el AR correcto
       });
       setPhase("enhanced");
       setPhaseMsg("Logo mejorado con IA ✓");
@@ -228,7 +241,7 @@ export default function OutlookSignaturePage() {
 
   return (
     <>
-      <MainTitle title="Outlook Signature Generator" />
+      <MainTitle title="Outlook Signature Generator" icon={ SignatureIcon } />
 
       {err && (
         <Alert color="warning" variant="soft" sx={{ mb: 2 }}>
@@ -308,7 +321,7 @@ export default function OutlookSignaturePage() {
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept="image/*"
+                    accept="image/*,.svg"
                     onChange={handleInputChange}
                     className="hidden"
                     disabled={isProcessing}
@@ -320,7 +333,7 @@ export default function OutlookSignaturePage() {
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
                   {isProcessing && <CircularProgress size="sm" />}
                   {phase === "perfect" && (
-                    <Chip color="success" variant="soft" size="sm">✓ Logo perfecto</Chip>
+                    <Chip color="success" variant="soft" size="sm">✓ Logo listo</Chip>
                   )}
                   {phase === "enhanced" && (
                     <Chip color="primary" variant="soft" size="sm">✨ Mejorado con IA</Chip>
@@ -335,8 +348,11 @@ export default function OutlookSignaturePage() {
               <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
                 {/* Original: muestra el archivo tal cual lo subió el usuario */}
                 <RawLogoCard title="Original" previewUrl={rawPreviewUrl} />
-                {/* Mejorado: resultado de OpenAI */}
-                <LogoCard title="Mejorado" data={enhanced} />
+                {/* Procesado: resultado final con fondo blanco y dimensiones correctas */}
+                <LogoCard
+                  title={enhanced ? "Mejorado con IA" : "Procesado"}
+                  data={enhanced ?? original}
+                />
               </Box>
 
               <Stack direction="row" spacing={1} className="mt-4">
@@ -392,9 +408,10 @@ function RawLogoCard({ title, previewUrl }: { title: string; previewUrl: string 
   );
 }
 
-// ── LogoCard — muestra el resultado procesado por OpenAI ──────────────────────
+// ── LogoCard — muestra el resultado procesado con dimensiones reales ──────────
 
 function LogoCard({ title, data }: { title: string; data: UploadResult | null }) {
+  // width/height vienen de getSmartLogoBox (basado en AR del contenido real)
   const w      = data?.width  ?? 96;
   const h      = data?.height ?? 96;
   const imgUrl = data?.display_url || data?.secure_url || null;
@@ -413,8 +430,9 @@ function LogoCard({ title, data }: { title: string; data: UploadResult | null })
               style={{ width: w, height: h, objectFit: "contain" }}
             />
             <Typography level="body-xs" sx={{ opacity: 0.8 }}>
-              {w}×{h}px • {Math.round((data?.bytes ?? 0) / 1024)} KB • {data?.format}
+              {w}×{h}px
               {data?.trimmed_ar ? ` • AR ${data.trimmed_ar.toFixed(2)}` : ""}
+              {data?.bytes ? ` • ${Math.round(data.bytes / 1024)} KB` : ""}
             </Typography>
           </>
         ) : (

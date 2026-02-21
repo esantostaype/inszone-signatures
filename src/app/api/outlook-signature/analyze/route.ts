@@ -18,7 +18,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing imageUrl" }, { status: 400 });
     }
 
-    // GPT-4o Vision — mucho más barato que image generation
     const aiRes = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -27,34 +26,38 @@ export async function POST(req: Request) {
       },
       body: JSON.stringify({
         model: "gpt-4o",
-        max_tokens: 100,
+        max_tokens: 150,
         messages: [
           {
             role: "user",
             content: [
               {
                 type: "image_url",
-                image_url: { url: imageUrl, detail: "high" },
+                // "low" para no amplificar artefactos de compresión al hacer zoom
+                image_url: { url: imageUrl, detail: "low" },
               },
               {
                 type: "text",
-                text: `Analyze this company logo image for use in an email signature.
+                text: `You are evaluating whether a company logo image needs AI quality enhancement.
 
-Respond ONLY with a JSON object like this (no markdown, no explanation):
-{"needsWork": true, "reason": "short reason in Spanish"}
-or
-{"needsWork": false, "reason": "short reason in Spanish"}
+Be VERY conservative — only flag genuinely bad quality images.
 
-needsWork must be true if ANY of these apply:
-- Background is not fully transparent (has white, gray, or any solid color)
-- Image is blurry, pixelated, or has compression artifacts
-- Edges are jagged or not crisp
-- Logo is not well centered or has excessive empty space
+Return ONLY a JSON object with no markdown:
+{"needsWork": false, "reason": "brief reason in Spanish"}
 
-needsWork must be false ONLY if:
-- Background is already transparent
-- Image is sharp and high quality
-- Edges are clean and crisp`,
+needsWork must be TRUE ONLY if the image has SEVERE quality problems:
+- Extremely blurry (like a photo taken out of focus)
+- Heavily pixelated (large visible blocks, not just normal digital edges)
+- Severe JPEG compression with large color blocks
+
+needsWork must be FALSE for:
+- Sharp, clear logos (even if they have a simple design)
+- Images with clean edges (digital/vector-like sharpness is fine)
+- Normal PNG or high-quality JPEG logos
+- Logos that look professionally designed
+- Any image where you are not 100% certain it needs enhancement
+
+Default to needsWork: false when in doubt. Most logos do not need enhancement.`,
               },
             ],
           },
@@ -65,27 +68,25 @@ needsWork must be false ONLY if:
     if (!aiRes.ok) {
       const errText = await aiRes.text();
       console.error("OpenAI analyze error:", errText);
-      // Si falla el análisis, asumimos que necesita trabajo (más seguro)
       return NextResponse.json<AnalyzeResult>({
-        needsWork: true,
-        reason: "No se pudo analizar la imagen, se mejorará por precaución",
+        needsWork: false,
+        reason: "No se pudo analizar la imagen, se usará el logo original",
       });
     }
 
     const aiJson: any = await aiRes.json();
     const content = aiJson?.choices?.[0]?.message?.content ?? "";
 
-    // Parsear JSON de la respuesta
     const cleaned = content.replace(/```json|```/g, "").trim();
     const result: AnalyzeResult = JSON.parse(cleaned);
 
+    console.log("Analyze result:", result);
     return NextResponse.json<AnalyzeResult>(result);
   } catch (e: any) {
     console.error("Analyze error:", e);
-    // En caso de error, asumimos que necesita trabajo
     return NextResponse.json<AnalyzeResult>({
-      needsWork: true,
-      reason: "Error al analizar, se mejorará por precaución",
+      needsWork: false,
+      reason: "Error al analizar, se usará el logo original",
     });
   }
 }
