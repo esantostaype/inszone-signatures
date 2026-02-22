@@ -3,78 +3,126 @@
 import { NextResponse } from "next/server";
 import { cloudinary } from "@/lib/cloudinary";
 import sharp from "sharp";
-import { getSmartLogoBox, addWhiteBackgroundAndPadding } from "@/lib/logoSmart";
+import { analyzeLogoBuffer, buildSmartDisplayUrl } from "@/lib/logoSmart";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const MAX_AI_PX = 640;
-const PADDING   = 20;
 
+/**
+ * Pre-procesa el logo para enviarlo a GPT:
+ * 1. Trim de espacio excesivo
+ * 2. Escala a máx 640px
+ * 3. CRÍTICO: Compone sobre fondo GRIS OSCURO (#1a1a2e) antes de enviar.
+ *    Esto hace que logos con contenido blanco sobre fondo transparente sean
+ *    visibles para GPT — sin esto, GPT recibe un "rectángulo blanco" y no
+ *    puede reconocer el diseño del logo.
+ */
 async function preprocessForAI(buffer: Buffer): Promise<Buffer> {
+  // Trim del espacio sobrante
   const trimmed = await sharp(buffer, { failOn: "none" })
     .trim({ threshold: 30 })
     .toBuffer();
 
+  // Escalar si es demasiado grande
   const meta = await sharp(trimmed).metadata();
   const w = meta.width  ?? 0;
   const h = meta.height ?? 0;
 
-  if (w <= MAX_AI_PX && h <= MAX_AI_PX) {
-    return sharp(trimmed).png().toBuffer();
-  }
+  const scaled = (w <= MAX_AI_PX && h <= MAX_AI_PX)
+    ? await sharp(trimmed).png().toBuffer()
+    : await sharp(trimmed)
+        .resize(MAX_AI_PX, MAX_AI_PX, { fit: "inside", withoutEnlargement: true })
+        .png()
+        .toBuffer();
 
-  return sharp(trimmed)
-    .resize(MAX_AI_PX, MAX_AI_PX, { fit: "inside", withoutEnlargement: true })
+  // Componer sobre fondo oscuro para que el contenido blanco sea visible a GPT
+  const scaledMeta = await sharp(scaled).metadata();
+  const sw = scaledMeta.width  ?? w;
+  const sh = scaledMeta.height ?? h;
+
+  const withDarkBg = await sharp({
+    create: {
+      width:      sw,
+      height:     sh,
+      channels:   3,
+      background: { r: 26, g: 26, b: 46 }, // #1a1a2e — oscuro pero no negro puro
+    },
+  })
+    .composite([{ input: scaled, top: 0, left: 0 }])
     .png()
     .toBuffer();
+
+  return withDarkBg;
 }
 
 // ── Handler ───────────────────────────────────────────────────────────────────
 
 export async function POST(req: Request) {
   try {
-    const { imageUrl } = await req.json();
+    // Acepta FormData con el archivo crudo del usuario
+    const form    = await req.formData();
+    const file    = form.get("file");
+    const isBadge = form.get("isBadge") === "true";
 
-    if (!imageUrl || typeof imageUrl !== "string") {
-      return NextResponse.json({ error: "Missing imageUrl" }, { status: 400 });
+    if (!file || !(file instanceof Blob)) {
+      return NextResponse.json({ error: "Missing file" }, { status: 400 });
     }
 
-    // 1) Descargar imagen original
-    const imgRes = await fetch(imageUrl);
-    if (!imgRes.ok) {
-      return NextResponse.json({ error: "Failed to download image" }, { status: 500 });
-    }
-    const rawBuf = Buffer.from(await imgRes.arrayBuffer());
+    // 1) Buffer crudo — exactamente lo que subió el usuario
+    const rawBuf = Buffer.from(await file.arrayBuffer());
 
-    // 2) Pre-procesar para AI: trim + escalar a máx 640px
+    // 2) Pre-procesar: trim + escala + fondo oscuro para que GPT vea el contenido
     const aiBuf = await preprocessForAI(rawBuf);
 
-    // 3) OpenAI: mejorar calidad del logo manteniendo diseño exacto
-    const prompt = `
-You are a professional graphic designer. Your ONLY task is to recreate this logo with higher quality.
+    // 3) Prompt según tipo de logo
+    const prompt = isBadge
+      ? `
+You are a professional graphic designer. Your task is to recreate this badge/emblem logo at higher quality as a PNG with TRANSPARENT background.
 
 STRICT RULES:
-1. Keep EXACTLY the same design, colors, text, fonts, layout, and proportions as the original
-2. Make the image sharper and cleaner — crisp edges, no blur, no pixelation
-3. The output background must be solid WHITE (#FFFFFF)
-4. Do NOT add any padding or border — just the logo with white background
-5. Do NOT change any colors, add effects, shadows, or modify the design in any way
-6. Output a clean, high-resolution PNG
+1. Keep EXACTLY the same design — same colors, shapes, text, fonts, layout, and proportions as the original
+2. The output MUST have a fully transparent background (PNG with alpha channel)
+3. Only the badge/emblem itself should be visible — no rectangular background behind it
+4. Make edges sharp and clean — crisp anti-aliasing, no blur, no pixelation
+5. Remove any excess empty space around the badge — tight-cropped
+6. Do NOT change any colors, add effects, drop shadows, or modify the design in any way
+7. Output a clean, high-resolution PNG with transparency
 
-The result must look exactly like the original logo, just at higher quality.
+The result must look exactly like the original badge, just at higher quality, with a transparent background.
+`.trim()
+      : `
+You are a professional graphic designer. Your task is to recreate this company logo at higher quality.
+
+IMPORTANT CONTEXT: The logo image you receive has been placed on a dark background (#1a1a2e) so you can see it clearly. The dark background is NOT part of the logo — it is just a viewing aid.
+
+STRICT RULES:
+1. Keep EXACTLY the same design — same shapes, text, fonts, icons, layout, and proportions as the original logo content
+2. The output background MUST be solid WHITE (#FFFFFF)
+3. Recreate all logo elements faithfully:
+   - If the logo content (text, icons, shapes) appears WHITE or LIGHT on the dark background → render them in DARK/BLACK on the white output background
+   - If the logo content appears COLORED (red, blue, etc.) → keep those exact colors on the white background
+   - If the logo content appears DARK on a light area → keep it dark on the white background
+4. Remove ALL excess whitespace — logo content should fill most of the canvas with minimal margin
+5. Make the image sharper and cleaner — crisp edges, no blur, no pixelation, no JPEG artifacts
+6. Do NOT add drop shadows, gradients, borders, or effects not present in the original logo
+7. Output a clean, high-resolution PNG
+
+The result must look like the original logo rendered on a clean white background, at higher quality.
 `.trim();
 
-    const form = new FormData();
-    form.append("model", "gpt-image-1");
-    form.append("prompt", prompt);
-    form.append("image", new Blob([new Uint8Array(aiBuf)], { type: "image/png" }), "logo.png");
-    form.append("size", "1024x1024");
+    // 4) OpenAI image edit
+    const formData = new FormData();
+    formData.append("model", "gpt-image-1");
+    formData.append("prompt", prompt);
+    formData.append("image", new Blob([new Uint8Array(aiBuf)], { type: "image/png" }), "logo.png");
+    formData.append("size", "1024x1024");
 
     const aiRes = await fetch("https://api.openai.com/v1/images/edits", {
       method: "POST",
       headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY!}` },
-      body: form,
+      body: formData,
     });
 
     if (!aiRes.ok) {
@@ -91,23 +139,10 @@ The result must look exactly like the original logo, just at higher quality.
 
     const enhancedBuf = Buffer.from(b64, "base64");
 
-    // 4) Trim del resultado de AI
-    const trimmed = await sharp(enhancedBuf, { failOn: "none" })
-      .trim({ threshold: 15 })
-      .png()
-      .toBuffer();
+    // 5) Pasar el resultado por el mismo pipeline que el upload normal
+    const { processedBuffer, trimmedAr, box, plan } = await analyzeLogoBuffer(enhancedBuf);
 
-    // 5) Calcular AR del logo antes del padding
-    const trimmedMeta = await sharp(trimmed).metadata();
-    const tw = trimmedMeta.width  ?? 1;
-    const th = trimmedMeta.height ?? 1;
-    const ar = tw / th;
-    const box = getSmartLogoBox(ar);
-
-    // 6) Agregar fondo blanco + 20px de padding
-    const finalBuf = await addWhiteBackgroundAndPadding(trimmed, PADDING);
-
-    // 7) Subir a Cloudinary
+    // 6) Subir a Cloudinary
     const uploadResult = await new Promise<any>((resolve, reject) => {
       cloudinary.uploader.upload_stream(
         {
@@ -117,11 +152,17 @@ The result must look exactly like the original logo, just at higher quality.
           transformation: [{ quality: 100 }, { fetch_format: "png" }],
         },
         (err, result) => (err ? reject(err) : resolve(result))
-      ).end(finalBuf);
+      ).end(processedBuffer);
     });
 
     const cloudName  = process.env.CLOUDINARY_CLOUD_NAME!;
-    const displayUrl = `https://res.cloudinary.com/${cloudName}/image/upload/f_png,q_100/${uploadResult.public_id}`;
+    const displayUrl = buildSmartDisplayUrl({
+      cloudName,
+      publicId: uploadResult.public_id,
+      box,
+    });
+
+    console.log("Enhance complete. Plan:", plan, "AR:", trimmedAr, "Box:", box);
 
     return NextResponse.json({
       public_id:   uploadResult.public_id,
@@ -129,9 +170,10 @@ The result must look exactly like the original logo, just at higher quality.
       display_url: displayUrl,
       width:       box.w,
       height:      box.h,
-      trimmed_ar:  ar,
+      trimmed_ar:  trimmedAr,
       bytes:       uploadResult.bytes,
       format:      "png",
+      plan,
     });
 
   } catch (e: any) {

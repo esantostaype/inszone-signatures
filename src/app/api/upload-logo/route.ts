@@ -18,13 +18,24 @@ export async function POST(req: Request) {
     const buffer   = Buffer.from(await file.arrayBuffer());
     const mimeType = file.type || "";
 
-    // 1) Analizar + procesar localmente
+    // 1) Subir el archivo CRUDO original a Cloudinary (sin ningún procesamiento)
+    const rawUploadResult = await new Promise<any>((resolve, reject) => {
+      cloudinary.uploader.upload_stream(
+        {
+          folder:        "logos/originals",
+          resource_type: "image",
+        },
+        (err, result) => (err ? reject(err) : resolve(result))
+      ).end(buffer);
+    });
+
+    // 2) Analizar + procesar localmente
     //    - SVG: rasteriza directamente, skipEnhancement = true
     //    - Otros: remueve fondo, trim, agrega fondo blanco + 20px padding
     const { plan, trimmedAr, box, processedBuffer, skipEnhancement } =
       await analyzeLogoBuffer(buffer, mimeType);
 
-    // 2) Subir el buffer procesado a Cloudinary (PNG con fondo blanco)
+    // 3) Subir el buffer procesado a Cloudinary (PNG con fondo blanco)
     const uploadResult = await new Promise<any>((resolve, reject) => {
       cloudinary.uploader.upload_stream(
         {
@@ -38,7 +49,7 @@ export async function POST(req: Request) {
 
     const cloudName = process.env.CLOUDINARY_CLOUD_NAME!;
 
-    // 3) URL con resize inteligente
+    // 4) URL con resize inteligente
     const displayUrl = buildSmartDisplayUrl({
       cloudName,
       publicId: uploadResult.public_id,
@@ -55,7 +66,9 @@ export async function POST(req: Request) {
       bytes:            uploadResult.bytes,
       format:           "png",
       plan,
-      skipEnhancement,  // ← true para SVG y otros casos donde no se necesita AI
+      skipEnhancement,
+      // URL del archivo crudo original — se usa para enviar a GPT en el enhance
+      raw_url:          rawUploadResult.secure_url,
     });
 
   } catch (e: any) {

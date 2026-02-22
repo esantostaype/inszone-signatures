@@ -1,11 +1,32 @@
 @import "tailwindcss";
 
+/* ── Variables base (light mode) ───────────────────────────────────────────── */
 :root {
-  --foreground: #020618;
-  --background: #ffffff;
-  --surface: #141429;
+  --foreground: #1a1f2e;
+  --background: #f4f6fb;
+  --surface: #ffffff;
+  --soft-bg: rgba(16,24,40, 0.04);
+  --soft-bg-hover: rgba(16,24,40, 0.08);
+  --soft-bg-active: rgba(16,24,40, 0.12);
+  --soft-bg-success: rgba(111, 140, 192, 0.12);
+  --soft-bg-success-hover: rgba(111, 140, 192, 0.24);
+  --soft-bg-success-active: rgba(111, 140, 192, 0.32);
 }
 
+/* ── Dark mode variables ────────────────────────────────────────────────────── */
+[data-joy-color-scheme="dark"] {
+  --foreground: #F3F4F6;
+  --background: #0A0A20;
+  --surface: #141429;
+  --soft-bg: rgba(255, 255, 255, 0.04);
+  --soft-bg-hover: rgba(255, 255, 255, 0.08);
+  --soft-bg-active: rgba(255, 255, 255, 0.12);
+  --soft-bg-success: rgba(111, 140, 192, 0.12);
+  --soft-bg-success-hover: rgba(111, 140, 192, 0.24);
+  --soft-bg-success-active: rgba(111, 140, 192, 0.32);
+}
+
+/* ── Tailwind theme tokens ─────────────────────────────────────────────────── */
 @theme {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -24,87 +45,71 @@
   --color-accent-950: #002E4E;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --foreground: #F3F4F6;
-    --background: #0A0A20;
-    --surface: #141429;
-    --soft-bg: rgba(255,255,255,0.04);
-    --soft-bg-hover: rgba(255,255,255,0.08);
-    --soft-bg-active: rgba(255,255,255,0.12);
-    --soft-bg-success: rgba(111, 140, 192,0.12);
-    --soft-bg-success-hover: rgba(111, 140, 192,0.24);
-    --soft-bg-success-active: rgba(111, 140, 192,0.32);
-  }
-}
-
+/* ── Scrollbar ─────────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar-track {
-  background-color: rgba(255, 255, 255, 0.08);
+  background-color: rgba(128, 128, 128, 0.08);
 }
-
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
   border-radius: 4px;
 }
-
 ::-webkit-scrollbar-thumb {
-  background-color: rgba(255, 255, 255, 0.16);
+  background-color: rgba(128, 128, 128, 0.24);
   border-radius: 4px;
 }
 
+/* ── Number inputs ─────────────────────────────────────────────────────────── */
 input::-webkit-outer-spin-button,
 input::-webkit-inner-spin-button {
   -webkit-appearance: none;
   margin: 0;
 }
-
 input[type=number] {
   -moz-appearance: textfield;
 }
-
 input {
   color-scheme: dark;
 }
+[data-joy-color-scheme="light"] input {
+  color-scheme: light;
+}
 
+/* ── Base ──────────────────────────────────────────────────────────────────── */
 body {
   background: var(--background);
   color: var(--foreground);
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
-.surface{
-  background: rgba(255,255,255,0.03);
+/* ── Utility classes ───────────────────────────────────────────────────────── */
+.surface {
+  background: var(--surface);
   backdrop-filter: blur(40px);
 }
 
-.soft-bg{
+.soft-bg {
   background-color: var(--soft-bg);
   &:hover {
     background-color: var(--soft-bg-hover);
   }
 }
+.soft-bg-hover  { background-color: var(--soft-bg-hover); }
+.soft-bg-active { background-color: var(--soft-bg-active); }
 
-.soft-bg-hover{
-  background-color: var(--soft-bg-hover);
-}
-
-.soft-bg-active{
-  background-color: var(--soft-bg-active);
-}
-
-.soft-bg-success{
+.soft-bg-success {
   background-color: var(--soft-bg-success);
   &:hover {
     background-color: var(--soft-bg-success-hover);
   }
 }
 
+/* ── Animations ────────────────────────────────────────────────────────────── */
 .orbit-container {
   position: relative;
   width: 3rem;
   height: 3rem;
 }
-
 .orbiting-icon {
   position: absolute;
   top: 50%;
@@ -112,19 +117,14 @@ body {
   transform: translate(-50%, -50%) rotate(0deg) translateX(1rem);
   animation: orbit 1.2s linear infinite;
 }
-
 @keyframes orbit {
-  0% {
-    transform: translate(-50%, -50%) rotate(0deg) translateX(1rem) rotate(0deg);
-  }
-  100% {
-    transform: translate(-50%, -50%) rotate(360deg) translateX(1rem) rotate(-360deg);
-  }
+  0%   { transform: translate(-50%, -50%) rotate(0deg)   translateX(1rem) rotate(0deg); }
+  100% { transform: translate(-50%, -50%) rotate(360deg) translateX(1rem) rotate(-360deg); }
 }
 
 @keyframes beat {
   0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.2); }
+  50%       { transform: scale(1.2); }
 }
 .animate-beat {
   animation: beat 1s ease-in-out infinite;

@@ -4,8 +4,8 @@ import { dynamicTheme } from '@/themes/dynamicTheme';
 
 export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
   return (
-    <CssVarsProvider theme={dynamicTheme} defaultMode="dark">      
+    <CssVarsProvider theme={dynamicTheme} defaultMode="system" modeStorageKey="app-color-mode">
       {children}
     </CssVarsProvider>
-  )
-}
+  );
+};
