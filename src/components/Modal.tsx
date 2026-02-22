@@ -92,7 +92,7 @@ export const GlobalModal: React.FC = () => {
         <div className="fixed inset-0 z-[99] flex items-center justify-center">
           {/* Backdrop animado */}
           <motion.div
-            className="absolute inset-0 bg-surface/90"
+            className="absolute inset-0 bg-background/80"
             variants={backdropVariants}
             initial="hidden"
             animate="visible"
@@ -104,7 +104,7 @@ export const GlobalModal: React.FC = () => {
           <motion.div
             className={`
               relative w-full mx-4 max-h-[90vh] overflow-hidden
-              bg-background rounded-xl shadow-2xl
+              bg-surface rounded-xl shadow-2xl
               ${sizeClasses[size]}
             `}
             variants={modalVariants}
@@ -113,8 +113,8 @@ export const GlobalModal: React.FC = () => {
             exit="exit"
           >
             {/* Header */}
-            <div className="flex items-center justify-between px-8 py-4 pr-4 border-b border-white/10">
-              <h2 className="text-xl font-semibold text-white">
+            <div className="flex items-center justify-between px-8 py-4 pr-4">
+              <h2 className="text-xl font-semibold">
                 {title}
               </h2>
               <IconButton variant='plain' size='sm' onClick={closeModal}>

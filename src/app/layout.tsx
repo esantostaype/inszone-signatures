@@ -2,7 +2,7 @@ import { Inter } from 'next/font/google'
 import './globals.css'
 import { ThemeProvider } from '@/providers/ThemeProvider'
 import { ThemeToggle } from '@/components/ThemeToggle';
-import { GlobalModal } from '@/components';
+import { GlobalModal, ToastNotification } from '@/components';
 import { GlobalConfirmation } from '@/components/Confirmation';
 
 const inter = Inter({ subsets: ["latin"] });
@@ -22,12 +22,13 @@ export default function RootLayout({
     <ThemeProvider>
       <html lang="en" className={inter.className}>
         <body>
-          <main className='h-dvh flex'>
+          <main className='min-h-dvh flex'>
             <ThemeToggle/>
             { children }
           </main>
           <GlobalModal />
           <GlobalConfirmation />
+          <ToastNotification />
         </body>
       </html>
     </ThemeProvider>

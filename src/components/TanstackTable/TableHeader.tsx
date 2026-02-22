@@ -1,5 +1,8 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client'
 
+import { Search01Icon } from '@hugeicons/core-free-icons'
+import { HugeiconsIcon } from '@hugeicons/react'
 import { Table as ReactTable } from '@tanstack/react-table'
 
 type TableInstance<TData extends object> = ReactTable<TData>
@@ -14,9 +17,9 @@ type Props<TData extends object> = {
 export const TableHeader = <TData extends object>({ table, filtering, setFiltering, placeholder }: Props<TData> ) => {
 
   return (
-    <div className="flex justify-between px-6 py-4 bg-background border-b border-b-gray50 sticky top-0 z-20">
+    <div className="flex justify-between px-6 py-4 bg-surface border-b border-b-[var(--soft-bg-active)] sticky top-0 z-20">
       <div className="flex items-center gap-2">
-        <i className="fi fi-rr-search"></i>
+        <HugeiconsIcon icon={ Search01Icon } size={ 20 } strokeWidth={ 1 } />
         <input
           type="text"
           name="searchTerm"

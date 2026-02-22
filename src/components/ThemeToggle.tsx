@@ -52,7 +52,7 @@ export function ThemeToggle() {
   const current = OPTIONS.find(o => o.value === mode) ?? OPTIONS[2];
 
   return (
-    <div className="absolute top-4 right-4 overflow-hidden">
+    <div className="absolute top-4 right-4 overflow-hidden z-[999]">
       <Tooltip title="Color theme" placement="bottom">
         <IconButton
           variant="soft"

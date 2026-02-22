@@ -130,7 +130,7 @@ export const GlobalConfirmation: React.FC = () => {
         <div className="fixed inset-0 z-[999] flex items-center justify-center">
           {/* Higher z-index backdrop */}
           <motion.div
-            className="absolute inset-0 bg-surface/60"
+            className="absolute inset-0 bg-background/80"
             variants={backdropVariants}
             initial="hidden"
             animate="visible"
@@ -140,7 +140,7 @@ export const GlobalConfirmation: React.FC = () => {
           
           {/* Confirmation Dialog */}
           <motion.div
-            className="relative w-full max-w-md mx-4 bg-background rounded-xl shadow-2xl"
+            className="relative w-full max-w-md mx-4 bg-surface rounded-xl shadow-2xl"
             variants={confirmationVariants}
             initial="hidden"
             animate="visible"
@@ -150,16 +150,16 @@ export const GlobalConfirmation: React.FC = () => {
             <div className="p-6 space-y-4">
               {/* Icon and Title */}
               <div className="flex items-center gap-3">
-                <div className={`p-2 rounded-full bg-white/5 ${getIconColor()}`}>
+                <div className={`p-2 rounded-full ${getIconColor()}`}>
                   <HugeiconsIcon icon={getIcon()} size={24} />
                 </div>
-                <h3 className="text-lg font-semibold text-white">
+                <h3 className="text-lg font-semibold">
                   {title}
                 </h3>
               </div>
               
               {/* Description */}
-              <p className="text-gray-300 leading-relaxed pl-11">
+              <p className="text-gray-500 leading-relaxed pl-11">
                 {description}
               </p>
               

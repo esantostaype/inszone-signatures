@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client'
 import { useReactTable,
   getCoreRowModel,
@@ -11,6 +12,8 @@ import { useReactTable,
 import { useState } from "react";
 import { TablePagination } from './TablePagination';
 import { TableHeader } from './TableHeader';
+import { HugeiconsIcon } from '@hugeicons/react';
+import { ArrowUpDownIcon, SortByDown02Icon, SortByUp02Icon } from '@hugeicons/core-free-icons';
 
 interface Props {
   data: any[]
@@ -67,7 +70,7 @@ export const TanstackTable = ({ data, columns, placeholder }: Props) => {
   const pages = Array.from({ length: table.getPageCount() }, ( _, i ) => i + 1 )
 
   return (
-    <div className="border border-gray50 rounded-lg overflow-x-auto max-w-full bg-surface has-scroll">
+    <div className="border border-[var(--soft-bg-active)] rounded-lg overflow-x-auto max-w-full bg-surface has-scroll">
       <TableHeader table={ table } filtering={ filtering } setFiltering={ setFiltering } placeholder={ placeholder } />
       <table className="w-full">
         <thead className="sticky top-[3.375rem] z-20">
@@ -76,7 +79,7 @@ export const TanstackTable = ({ data, columns, placeholder }: Props) => {
               { headerGroup.headers.map
                 ( header =>
                   (
-                    <th key={ header.id } className="bg-background px-6 py-4 text-left border-b-2 border-b-gray50 first:w-12">
+                    <th key={ header.id } className="bg-surface px-6 py-4 text-left border-b-2 border-b-[var(--soft-bg-active)] first:w-12">
                       <div className="flex items-center gap-3 cursor-pointer uppercase group" onClick={ header.column.getToggleSortingHandler() }>
                         { flexRender(
                           header.column.columnDef.header,
@@ -85,12 +88,12 @@ export const TanstackTable = ({ data, columns, placeholder }: Props) => {
                         { header.column.getCanSort() && (
                           header.column.getIsSorted() ? (
                             header.column.getIsSorted() === 'asc' ? (
-                              <i className="text-sm fi fi-rr-arrow-small-up text-accent"></i>
+                              <HugeiconsIcon icon={ SortByUp02Icon } size={ 16 } strokeWidth={ 2 } className='text-accent-900 dark:text-accent' />
                             ) : (
-                              <i className="text-sm fi fi-rr-arrow-small-down text-accent"></i>
+                              <HugeiconsIcon icon={ SortByDown02Icon } size={ 16 } strokeWidth={ 2 } className='text-accent-900 dark:text-accent' />
                             )
                           ) : (
-                            <i className="text-sm fi fi-tr-sort-alt opacity-50 group-hover:opacity-100 group-hover:text-accent"></i>
+                            <HugeiconsIcon icon={ ArrowUpDownIcon } size={ 16 } strokeWidth={ 2 } className='hover:text-accent-900 dark:hover:text-accent opacity-40 hover:opacity-100' />
                           )
                         )}
                       </div>
@@ -105,7 +108,7 @@ export const TanstackTable = ({ data, columns, placeholder }: Props) => {
           { table.getRowModel().rows.map(( row ) => (
             <tr key={ row.id } className="group">
               { row.getVisibleCells().map( cell => (
-                <td key={ cell.id } className="group-hover:bg-background first:w-12 px-6 py-4 bg-surface border-t border-t-gray50">
+                <td key={ cell.id } className="group-hover:bg-background first:w-12 px-6 py-4 bg-surface border-t border-t-[var(--soft-bg-active)]">
                   { flexRender( cell.column.columnDef.cell, cell.getContext() ) }
                 </td>
               ) ) }
@@ -114,7 +117,7 @@ export const TanstackTable = ({ data, columns, placeholder }: Props) => {
         </tbody>
       </table>
       { pages.length > 1 &&
-        <div className="bg-background py-4 px-6 border-t-2 border-t-gray50 sticky z-20 bottom-0">
+        <div className="bg-background py-4 px-6 border-t-2 border-t-[var(--soft-bg-active)] sticky z-20 bottom-0">
           <TablePagination table={ table } pages={ pages } />
         </div>
       }
