@@ -9,7 +9,6 @@ import { toast } from "react-toastify";
 import { buildOutlookSignatureHtml } from "@/lib/outlookSignature";
 import { SignaturePreview } from "@/components/signatures/SignaturePreview";
 import Button from "@mui/joy/Button";
-import CircularProgress from "@mui/joy/CircularProgress";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   EyeIcon,
@@ -144,7 +143,7 @@ function RowActions({ row, onDelete }: RowActionsProps) {
         disabled={copying !== null}
         startDecorator={
           copying === "powered-by"
-            ? <CircularProgress size="sm" />
+            ? <HugeiconsIcon icon={Copy01Icon} size={14} />
             : <HugeiconsIcon icon={Copy01Icon} size={14} />
         }
         sx={{ whiteSpace: "nowrap", fontSize: 11 }}
@@ -160,7 +159,7 @@ function RowActions({ row, onDelete }: RowActionsProps) {
         disabled={copying !== null}
         startDecorator={
           copying === "formerly"
-            ? <CircularProgress size="sm" />
+            ? <HugeiconsIcon icon={Copy01Icon} size={14} />
             : <HugeiconsIcon icon={Copy01Icon} size={14} />
         }
         sx={{ whiteSpace: "nowrap", fontSize: 11 }}

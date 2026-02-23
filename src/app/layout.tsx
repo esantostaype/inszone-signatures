@@ -9,8 +9,8 @@ import { QueryProvider } from '@/providers/QueryProvider';
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata = {
-  title: "Assignify by Inszone",
-  description: "Assignify by Inszone is a smart task automation platform.",
+  title: "Inszone Signatures",
+  description: "Inszone Signature is a smart Signatures generator platform.",
 };
 
 // Script que corre ANTES de que React hidrate — elimina el flash
@@ -35,7 +35,6 @@ export default function RootLayout({
     <ThemeProvider>
       <html lang="en" className={inter.className}>
         <head>
-          {/* Script bloqueante — debe ir antes de cualquier CSS */}
           <script dangerouslySetInnerHTML={{ __html: themeScript }} />
         </head>
         <body>
