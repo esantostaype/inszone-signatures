@@ -80,7 +80,7 @@ export const TanstackTable = ({ data, columns, placeholder }: Props) => {
                 ( header =>
                   (
                     <th key={ header.id } className="bg-surface px-6 py-4 text-left border-b-2 border-b-[var(--soft-bg-active)] first:w-12">
-                      <div className="flex items-center gap-3 cursor-pointer uppercase group" onClick={ header.column.getToggleSortingHandler() }>
+                      <div className="flex items-center gap-3 cursor-pointer text-xs text-foreground/70 uppercase group" onClick={ header.column.getToggleSortingHandler() }>
                         { flexRender(
                           header.column.columnDef.header,
                           header.getContext()
