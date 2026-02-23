@@ -7,52 +7,43 @@ import Menu from '@mui/joy/Menu';
 import MenuItem from '@mui/joy/MenuItem';
 import ListItemDecorator from '@mui/joy/ListItemDecorator';
 import Tooltip from '@mui/joy/Tooltip';
-
-// ── Iconos SVG inline (sin dependencias extra) ────────────────────────────────
-
-function SunIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="4"/>
-      <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>
-    </svg>
-  );
-}
-
-function MoonIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
-    </svg>
-  );
-}
-
-function SystemIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="2" y="3" width="20" height="14" rx="2"/>
-      <path d="M8 21h8M12 17v4"/>
-    </svg>
-  );
-}
+import { HugeiconsIcon } from '@hugeicons/react';
+import { Sun03Icon, Moon02Icon, ComputerIcon } from '@hugeicons/core-free-icons';
 
 type Mode = 'light' | 'dark' | 'system';
 
 const OPTIONS: { value: Mode; label: string; icon: React.ReactNode }[] = [
-  { value: 'light',  label: 'Light',  icon: <SunIcon />    },
-  { value: 'dark',   label: 'Dark',   icon: <MoonIcon />   },
-  { value: 'system', label: 'System', icon: <SystemIcon /> },
+  { value: 'light',  label: 'Light',  icon: <HugeiconsIcon icon={Sun03Icon}     size={16} /> },
+  { value: 'dark',   label: 'Dark',   icon: <HugeiconsIcon icon={Moon02Icon}      size={16} /> },
+  { value: 'system', label: 'System', icon: <HugeiconsIcon icon={ComputerIcon} size={16} /> },
 ];
 
 export function ThemeToggle() {
   const { mode, setMode } = useColorScheme();
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
+  const [mounted, setMounted] = React.useState(false);
   const open = Boolean(anchorEl);
+
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // En SSR y primer render renderiza un placeholder del mismo tamaño
+  // para evitar layout shift
+  if (!mounted) {
+    return (
+      <div className="absolute top-4 right-4 z-[999]">
+        <IconButton variant="soft" size="sm" disabled aria-label="Toggle color theme">
+          <HugeiconsIcon icon={ComputerIcon} size={16} />
+        </IconButton>
+      </div>
+    );
+  }
 
   const current = OPTIONS.find(o => o.value === mode) ?? OPTIONS[2];
 
   return (
-    <div className="absolute top-4 right-4 overflow-hidden z-[999]">
+    <div className="absolute top-4 right-4 z-[999]">
       <Tooltip title="Color theme" placement="bottom">
         <IconButton
           variant="soft"

@@ -39,16 +39,10 @@ export function SignatureForm({ state }: SignatureFormProps) {
   const { values, errors, touched, handleChange, handleBlur } = formik;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+    <div>
 
       {/* ── Grid 2 columns ──────────────────────────────────── */}
-      <div
-        style={{
-          display:             "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap:                 16,
-        }}
-      >
+      <div className="grid md:grid-cols-2 gap-4">
         {/* Name — col span 2 */}
         <FormControl
           error={Boolean(touched.name && errors.name)}

@@ -7,9 +7,15 @@ import { useConfirmationStore } from "@/stores/confirmationStore";
 import { useModalStore } from "@/stores/modalStore";
 import { toast } from "react-toastify";
 import { buildOutlookSignatureHtml } from "@/lib/outlookSignature";
+import { SignaturePreview } from "@/components/signatures/SignaturePreview";
 import Button from "@mui/joy/Button";
 import CircularProgress from "@mui/joy/CircularProgress";
-import { SignaturePreview } from "@/components/signatures/SignaturePreview";
+import { HugeiconsIcon } from "@hugeicons/react";
+import {
+  EyeIcon,
+  Copy01Icon,
+  Delete02Icon,
+} from "@hugeicons/core-free-icons";
 
 // ── Types ─────────────────────────────────────────────────────
 
@@ -60,7 +66,7 @@ function SignaturePreviewContent({ row }: { row: SavedSignature }) {
         contactLines: row.contactLines,
         email:        row.email,
         address:      row.address,
-        lic:          row.lic ?? ""
+        lic:          row.lic ?? "",
       }}
       logoUrl={row.partnerLogoUrl    ?? ""}
       logoWidth={row.partnerLogoWidth  ?? 96}
@@ -118,12 +124,13 @@ function RowActions({ row, onDelete }: RowActionsProps) {
   }
 
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "nowrap" }}>
+    <div className="flex items-center gap-2 flex-nowrap">
       <Button
         size="sm"
         variant="soft"
         color="success"
         onClick={handlePreview}
+        startDecorator={<HugeiconsIcon icon={EyeIcon} size={14} />}
         sx={{ whiteSpace: "nowrap", fontSize: 11 }}
       >
         Preview
@@ -135,7 +142,11 @@ function RowActions({ row, onDelete }: RowActionsProps) {
         color="primary"
         onClick={() => handleCopy("powered-by")}
         disabled={copying !== null}
-        startDecorator={copying === "powered-by" ? <CircularProgress size="sm" /> : undefined}
+        startDecorator={
+          copying === "powered-by"
+            ? <CircularProgress size="sm" />
+            : <HugeiconsIcon icon={Copy01Icon} size={14} />
+        }
         sx={{ whiteSpace: "nowrap", fontSize: 11 }}
       >
         Copy Powered By
@@ -147,7 +158,11 @@ function RowActions({ row, onDelete }: RowActionsProps) {
         color="neutral"
         onClick={() => handleCopy("formerly")}
         disabled={copying !== null}
-        startDecorator={copying === "formerly" ? <CircularProgress size="sm" /> : undefined}
+        startDecorator={
+          copying === "formerly"
+            ? <CircularProgress size="sm" />
+            : <HugeiconsIcon icon={Copy01Icon} size={14} />
+        }
         sx={{ whiteSpace: "nowrap", fontSize: 11 }}
       >
         Copy Formerly
@@ -159,6 +174,7 @@ function RowActions({ row, onDelete }: RowActionsProps) {
         color="danger"
         onClick={() => onDelete(row.id)}
         disabled={copying !== null}
+        startDecorator={<HugeiconsIcon icon={Delete02Icon} size={14} />}
         sx={{ fontSize: 11 }}
       >
         Delete
@@ -176,12 +192,8 @@ function LogoCell({ url, width, height }: {
 }) {
   if (!url) {
     return (
-      <div style={{
-        width: 48, height: 48, borderRadius: 6,
-        background: "rgba(100,100,120,0.15)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        fontSize: 10, color: "#888",
-      }}>
+      <div className="w-12 h-12 rounded-md flex items-center justify-center text-[10px] text-gray-500"
+        style={{ background: "rgba(100,100,120,0.15)" }}>
         No logo
       </div>
     );
@@ -233,12 +245,8 @@ export function SignaturesTable({ data, onRefresh }: SignaturesTableProps) {
       header:      "Name",
       accessorKey: "name",
       cell: ({ getValue }) => (
-        <span style={{ fontWeight: 500 }}>{String(getValue())}</span>
+        <span className="font-medium">{String(getValue())}</span>
       ),
-    },
-    {
-      header:      "Full Name",
-      accessorKey: "fullName",
     },
     {
       header: "Partner Logo",
@@ -267,7 +275,7 @@ export function SignaturesTable({ data, onRefresh }: SignaturesTableProps) {
     <TanstackTable
       data={data}
       columns={columns}
-      placeholder="Search by name or full name…"
+      placeholder="Search by name…"
     />
   );
 }

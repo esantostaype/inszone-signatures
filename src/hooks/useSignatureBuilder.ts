@@ -5,6 +5,7 @@ import { useFormik } from "formik";
 import * as Yup from "yup";
 import { toast } from "react-toastify";
 import { buildOutlookSignatureHtml } from "@/lib/outlookSignature";
+import { useInvalidateSignatures } from "@/hooks/useSignatures";
 
 // ── Constants ─────────────────────────────────────────────────
 
@@ -103,6 +104,8 @@ export function useSignatureBuilder() {
   const [uploadMsg,    setUploadMsg]    = React.useState("");
   const [uploadErr,    setUploadErr]    = React.useState("");
   const [logoError,    setLogoError]    = React.useState("");
+
+  const invalidateSignatures = useInvalidateSignatures();
 
   const activeLogo      = enhanced ?? uploadedLogo;
   const logoUrl         = activeLogo?.display_url || DEFAULT_LOGO_URL;
@@ -237,6 +240,7 @@ export function useSignatureBuilder() {
       }
 
       toast.success("Signature saved!");
+      invalidateSignatures();
     } catch (e: unknown) {
       toast.error((e as Error)?.message || "Error saving signature");
     } finally {

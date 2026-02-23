@@ -30,8 +30,8 @@ export const TableHeader = <TData extends object>({ table, filtering, setFilteri
           className="outline-none"
         />
       </div>
-      <div className="flex items-center gap-6">
-        Páginas: {' '}
+      {/* <div className="flex items-center gap-6 text-sm">
+        Pages: {' '}
         { table.getState().pagination.pageIndex + 1 } de{' '}
         { table.getPageCount().toLocaleString() } 
         <select
@@ -41,12 +41,12 @@ export const TableHeader = <TData extends object>({ table, filtering, setFilteri
           }}
         >
           {[ 10, 20, 30, 40, 50 ].map( pageSize  => (
-            <option key={ pageSize } value={ pageSize }>
-              Mostrar { pageSize }
+            <option key={ pageSize } value={ pageSize } className='text-foreground'>
+              Show { pageSize }
             </option>
           ))}
         </select>
-      </div>
+      </div> */}
     </div>
   )
 }

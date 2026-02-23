@@ -154,35 +154,49 @@ interface SignaturePreviewProps {
 }
 
 export function SignaturePreview({
-  values, logoUrl, logoWidth, logoHeight, logoLoading, isPending, withTitle=true
+  values, logoUrl, logoWidth, logoHeight, logoLoading, isPending, withTitle = true
 }: SignaturePreviewProps) {
   const { mode, systemMode } = useColorScheme();
-  const isDark = mode === "dark" || (mode === "system" && systemMode === "dark");
+  const [mounted, setMounted] = React.useState(false);
+
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Antes de montar, usa dark como default para evitar el flash blanco
+  const isDark = mounted
+    ? mode === "dark" || (mode === "system" && systemMode === "dark")
+    : true;
 
   return (
-    <Box sx={{ background: isDark ? "#1e1e35" : "#fff", padding: "32px", flex: 1, overflow: "hidden", transition: "background 0.2s ease" }}>
-        {
-          withTitle &&
-          <Box sx={{ display: "flex", alignItems: "center", gap: 3, mb: 4 }}>
-            <MainTitle title="Preview" icon={EyeIcon} />
-            {isPending && (
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                <CircularProgress size="sm" />
-                <Typography level="body-xs" sx={{ opacity: 0.6 }}>Updating…</Typography>
-              </Box>
-            )}
-          </Box>
-        }
-        <div style={{ display: "flex", justifyContent: "center" }}>
-          <SignatureTable
-            values={values}
-            logoUrl={logoUrl}
-            logoWidth={logoWidth}
-            logoHeight={logoHeight}
-            isDark={isDark}
-            logoLoading={logoLoading}
-          />
-        </div>
+    <Box sx={{
+      background: isDark ? "#1e1e35" : "#fff",
+      padding: "32px 32px 48px",
+      flex: 1,
+      overflow: "hidden",
+      transition: mounted ? "background 0.2s ease" : "none", // evita transición en el primer render
+    }}>
+      {withTitle && (
+        <Box sx={{ display: "flex", alignItems: "center", gap: 3, mb: 4 }}>
+          <MainTitle title="Preview" icon={EyeIcon} />
+          {isPending && (
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <CircularProgress size="sm" />
+              <Typography level="body-xs" sx={{ opacity: 0.6 }}>Updating…</Typography>
+            </Box>
+          )}
+        </Box>
+      )}
+      <div style={{ display: "flex", justifyContent: "center" }}>
+        <SignatureTable
+          values={values}
+          logoUrl={logoUrl}
+          logoWidth={logoWidth}
+          logoHeight={logoHeight}
+          isDark={isDark}
+          logoLoading={logoLoading}
+        />
+      </div>
     </Box>
   );
 }
