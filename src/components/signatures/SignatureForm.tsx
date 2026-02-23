@@ -1,3 +1,4 @@
+/* eslint-disable react/no-unescaped-entities */
 "use client";
 // src/components/organisms/SignatureForm.tsx
 import * as React from "react";
@@ -40,7 +41,6 @@ export function SignatureForm({ state }: SignatureFormProps) {
 
   return (
     <div>
-
       {/* ── Grid 2 columns ──────────────────────────────────── */}
       <div className="grid md:grid-cols-2 gap-4">
         {/* Name — col span 2 */}
@@ -51,13 +51,19 @@ export function SignatureForm({ state }: SignatureFormProps) {
           <FormLabel>Signature Name *</FormLabel>
           <Input
             name="name"
-            placeholder="e.g. Mena Office — Reinalyn"
+            placeholder="e.g. Farmers Insurance, State Farm, AAA Insurance…"
             value={values.name}
             onChange={handleChange}
             onBlur={handleBlur}
           />
+          <Typography level="body-sm" sx={{ mt: 0.5 }} color="neutral">
+            Use the partner company name — this is how you'll find this
+            signature later.
+          </Typography>
           {touched.name && errors.name && (
-            <Typography level="body-xs" color="danger">{errors.name}</Typography>
+            <Typography level="body-xs" color="danger">
+              {errors.name}
+            </Typography>
           )}
         </FormControl>
 
@@ -71,7 +77,9 @@ export function SignatureForm({ state }: SignatureFormProps) {
             onBlur={handleBlur}
           />
           {touched.fullName && errors.fullName && (
-            <Typography level="body-xs" color="danger">{errors.fullName}</Typography>
+            <Typography level="body-xs" color="danger">
+              {errors.fullName}
+            </Typography>
           )}
         </FormControl>
 
@@ -85,12 +93,16 @@ export function SignatureForm({ state }: SignatureFormProps) {
             onBlur={handleBlur}
           />
           {touched.title && errors.title && (
-            <Typography level="body-xs" color="danger">{errors.title}</Typography>
+            <Typography level="body-xs" color="danger">
+              {errors.title}
+            </Typography>
           )}
         </FormControl>
 
         {/* Contact Lines */}
-        <FormControl error={Boolean(touched.contactLines && errors.contactLines)}>
+        <FormControl
+          error={Boolean(touched.contactLines && errors.contactLines)}
+        >
           <FormLabel>Contact Lines *</FormLabel>
           <Textarea
             name="contactLines"
@@ -100,7 +112,9 @@ export function SignatureForm({ state }: SignatureFormProps) {
             onBlur={handleBlur}
           />
           {touched.contactLines && errors.contactLines && (
-            <Typography level="body-xs" color="danger">{errors.contactLines}</Typography>
+            <Typography level="body-xs" color="danger">
+              {errors.contactLines}
+            </Typography>
           )}
         </FormControl>
 
@@ -115,7 +129,9 @@ export function SignatureForm({ state }: SignatureFormProps) {
             onBlur={handleBlur}
           />
           {touched.address && errors.address && (
-            <Typography level="body-xs" color="danger">{errors.address}</Typography>
+            <Typography level="body-xs" color="danger">
+              {errors.address}
+            </Typography>
           )}
         </FormControl>
 
@@ -130,7 +146,9 @@ export function SignatureForm({ state }: SignatureFormProps) {
             onBlur={handleBlur}
           />
           {touched.email && errors.email && (
-            <Typography level="body-xs" color="danger">{errors.email}</Typography>
+            <Typography level="body-xs" color="danger">
+              {errors.email}
+            </Typography>
           )}
         </FormControl>
 

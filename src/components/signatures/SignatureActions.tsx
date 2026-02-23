@@ -26,7 +26,7 @@ export function SignatureActions({
     <div className="mt-4 flex flex-col sm:flex-row gap-2 items-start sm:items-center">
       <Button
         variant="solid"
-        color="neutral"
+        color="primary"
         onClick={onSave}
         disabled={busy || busySave || isPending}
         startDecorator={

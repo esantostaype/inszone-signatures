@@ -20,7 +20,7 @@ export default function SignatureGeneratorPage() {
         <div className="mx-auto xl:w-3xl">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
             <MainTitle title="Outlook Signature Generator" icon={SignatureIcon} />
-            <Button component={Link} href="/signatures" variant="soft" color="neutral" size="sm">
+            <Button component={Link} href="/signatures" variant="soft" color="primary" size="sm">
               All Signatures
             </Button>
           </div>
