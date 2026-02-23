@@ -10,7 +10,7 @@ const inter = Inter({ subsets: ["latin"] });
 
 export const metadata = {
   title: "Inszone Signatures",
-  description: "Inszone Signature is a smart Signatures generator platform.",
+  description: "Outlook Signature Generator for Inszone Insurance. Create branded email signatures with partner logos, save them to your library, and copy them instantly in Powered By or Formerly Operating As format.",
 };
 
 // Script que corre ANTES de que React hidrate — elimina el flash
