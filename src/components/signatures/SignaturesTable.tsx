@@ -56,16 +56,22 @@ function stripHtml(html: string) {
 // ── Signature Preview content (inside modal) ──────────────────
 
 function SignaturePreviewContent({ row }: { row: SavedSignature }) {
+  // Parse "Phone: (123) 456-7890\nFax: (123) 456-7890" back into separate fields
+  const phone = row.contactLines.match(/Phone:\s*(.+)/)?.[1]?.trim() ?? "";
+  const fax   = row.contactLines.match(/Fax:\s*(.+)/)?.[1]?.trim()   ?? "";
+
   return (
     <SignaturePreview
       values={{
-        name:         row.name,
-        fullName:     row.fullName,
-        title:        row.title,
-        contactLines: row.contactLines,
-        email:        row.email,
-        address:      row.address,
-        lic:          row.lic ?? "",
+        name:     row.name,
+        fullName: row.fullName,
+        title:    row.title,
+        phone,
+        fax,
+        email:    row.email,
+        address:  row.address,
+        website:  "",
+        lic:      row.lic ?? "",
       }}
       logoUrl={row.partnerLogoUrl    ?? ""}
       logoWidth={row.partnerLogoWidth  ?? 96}
