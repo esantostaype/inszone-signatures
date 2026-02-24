@@ -184,10 +184,8 @@ function RowActions({ row, onDelete }: RowActionsProps) {
 
 // ── Logo cell ─────────────────────────────────────────────────
 
-function LogoCell({ url, width, height }: {
+function LogoCell({ url }: {
   url:    string | null;
-  width:  number | null;
-  height: number | null;
 }) {
   if (!url) {
     return (
@@ -198,16 +196,11 @@ function LogoCell({ url, width, height }: {
     );
   }
 
-  const displayW = width  ? Math.min(width, 80)  : 48;
-  const displayH = height ? Math.min(height, 48) : 48;
-
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
       src={url}
       alt="Partner logo"
-      width={displayW}
-      height={displayH}
       style={{ objectFit: "contain", display: "block" }}
     />
   );
@@ -253,8 +246,6 @@ export function SignaturesTable({ data, onRefresh }: SignaturesTableProps) {
       cell: ({ row }) => (
         <LogoCell
           url={row.original.partnerLogoUrl}
-          width={row.original.partnerLogoWidth}
-          height={row.original.partnerLogoHeight}
         />
       ),
     },

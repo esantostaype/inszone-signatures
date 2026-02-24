@@ -25,18 +25,18 @@ export type SmartLogoResult = {
 export function getSmartLogoBox(ar: number): LogoBox {
   let w: number;
 
-  if (ar < 0.85)       w = 40;
-  else if (ar <= 1.18) w = 64;
-  else if (ar <= 1.7) w = 96;
-  else if (ar <= 2.4) w = 105;
-  else if (ar <= 3.4) w = 117;
-  else if (ar <= 4.4) w = 126;
-  else if (ar <= 5.4) w = 136;
-  else if (ar <= 6.4) w = 145;
-  else if (ar <= 7.4) w = 154;
-  else if (ar <= 8.4) w = 164;
-  else if (ar <= 9.4) w = 173;
-  else                w = 180;
+  if (ar < 0.85)       w = 48;
+  else if (ar <= 1.18) w = 72;
+  else if (ar <= 1.7) w = 106;
+  else if (ar <= 2.4) w = 118;
+  else if (ar <= 3.4) w = 130;
+  else if (ar <= 4.4) w = 142;
+  else if (ar <= 5.4) w = 154;
+  else if (ar <= 6.4) w = 166;
+  else if (ar <= 7.4) w = 178;
+  else if (ar <= 8.4) w = 190;
+  else if (ar <= 9.4) w = 202;
+  else                w = 214;
 
   const h = Math.round(w / ar);
   return { w, h };
