@@ -51,8 +51,7 @@ function buildRightColumn(
   type:           SignatureType
 ): string {
   const partnerImg = partnerLogoUrl
-    ? `<img src="${partnerLogoUrl}" alt="Partner" width="${logoW}" height="${logoH}"
-         style="display:block;margin:0 auto 6px;width:${logoW}px;height:${logoH}px;object-fit:contain;">`
+    ? `<img src="${partnerLogoUrl}" alt="Partner" style="display:block;margin:0 auto 6px;object-fit:contain;">`
     : "";
 
   const inszoneImg = `<img src="${INSZONE_LOGO_URL}" alt="Inszone Insurance" style="display:inline">`;
