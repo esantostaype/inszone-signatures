@@ -23,11 +23,12 @@ export interface SavedSignature {
   name:              string;
   fullName:          string;
   title:             string;
-  phone:             string | null;   // ← agrega
-  fax:               string | null;   // ← agrega
+  phone:             string | null;
+  fax:               string | null;
   contactLines:      string;
   email:             string;
   address:           string;
+  website:           string | null;  // ← añadido
   lic:               string | null;
   partnerLogoUrl:    string | null;
   partnerLogoWidth:  number | null;
@@ -64,7 +65,7 @@ async function triggerLetterheadDownload(row: SavedSignature): Promise<void> {
       phone:             row.phone             || "",
       fax:               row.fax               || "",
       address:           row.address,
-      website:           "",
+      website:           row.website           || "",  // ← fix: usar el campo guardado
       partnerLogoUrl:    row.partnerLogoUrl    || "",
       partnerLogoWidth:  row.partnerLogoWidth  || 152,
       partnerLogoHeight: row.partnerLogoHeight || 44,
@@ -102,7 +103,7 @@ function SignaturePreviewContent({ row }: { row: SavedSignature }) {
         fax,
         email:   row.email,
         address: row.address,
-        website: "",
+        website: row.website ?? "",
         lic:     row.lic ?? "",
       }}
       logoUrl={row.partnerLogoUrl    ?? ""}
