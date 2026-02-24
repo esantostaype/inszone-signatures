@@ -120,7 +120,7 @@ export function LogoUploader({
           />
         </label>
         {logoError && (
-          <Typography level="body-xs" color="danger">{logoError}</Typography>
+          <Typography level="body-xs" color="danger" sx={{ mt: 0.5 }}>{logoError}</Typography>
         )}
       </FormControl>
 

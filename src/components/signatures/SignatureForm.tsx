@@ -70,7 +70,7 @@ export function SignatureForm({ state }: SignatureFormProps) {
             Use the partner company name — this is how you'll find this signature later.
           </Typography>
           {touched.name && errors.name && (
-            <Typography level="body-xs" color="danger">{errors.name}</Typography>
+            <Typography level="body-xs" color="danger" sx={{ mt: 0.5 }} >{errors.name}</Typography>
           )}
         </FormControl>
 
@@ -84,7 +84,7 @@ export function SignatureForm({ state }: SignatureFormProps) {
             onBlur={handleBlur}
           />
           {touched.fullName && errors.fullName && (
-            <Typography level="body-xs" color="danger">{errors.fullName}</Typography>
+            <Typography level="body-xs" color="danger" sx={{ mt: 0.5 }}>{errors.fullName}</Typography>
           )}
         </FormControl>
 
@@ -98,7 +98,7 @@ export function SignatureForm({ state }: SignatureFormProps) {
             onBlur={handleBlur}
           />
           {touched.title && errors.title && (
-            <Typography level="body-xs" color="danger">{errors.title}</Typography>
+            <Typography level="body-xs" color="danger" sx={{ mt: 0.5 }}>{errors.title}</Typography>
           )}
         </FormControl>
 
@@ -112,7 +112,7 @@ export function SignatureForm({ state }: SignatureFormProps) {
             onBlur={handleBlur}
           />
           {touched.phone && errors.phone && (
-            <Typography level="body-xs" color="danger">{errors.phone}</Typography>
+            <Typography level="body-xs" color="danger" sx={{ mt: 0.5 }}>{errors.phone}</Typography>
           )}
         </FormControl>
 
@@ -139,7 +139,7 @@ export function SignatureForm({ state }: SignatureFormProps) {
             onBlur={handleBlur}
           />
           {touched.email && errors.email && (
-            <Typography level="body-xs" color="danger">{errors.email}</Typography>
+            <Typography level="body-xs" color="danger" sx={{ mt: 0.5 }}>{errors.email}</Typography>
           )}
         </FormControl>
 
@@ -167,7 +167,7 @@ export function SignatureForm({ state }: SignatureFormProps) {
             onBlur={handleBlur}
           />
           {touched.address && errors.address && (
-            <Typography level="body-xs" color="danger">{errors.address}</Typography>
+            <Typography level="body-xs" color="danger" sx={{ mt: 0.5 }}>{errors.address}</Typography>
           )}
         </FormControl>
 
