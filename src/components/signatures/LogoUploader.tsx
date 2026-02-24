@@ -1,5 +1,5 @@
 "use client";
-// src/components/molecules/LogoUploader.tsx
+// src/components/signatures/LogoUploader.tsx
 import * as React from "react";
 import FormControl from "@mui/joy/FormControl";
 import FormLabel from "@mui/joy/FormLabel";
@@ -8,24 +8,35 @@ import Box from "@mui/joy/Box";
 import Button from "@mui/joy/Button";
 import CircularProgress from "@mui/joy/CircularProgress";
 import Chip from "@mui/joy/Chip";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { SparklesIcon, SquareArrowExpand01Icon } from "@hugeicons/core-free-icons";
+import { useResizeLogoModal } from "@/components/signatures/ResizeLogoModal";
 
 interface LogoUploaderProps {
-  onUpload:      (file: File) => void;
-  onEnhance:     () => void;
-  canEnhance:    boolean;
-  busyUpload:    boolean;
-  busyEnhance:   boolean;
-  uploadMsg:     string;
-  uploadErr:     string;
-  logoError:     string;
-  hasLogo:       boolean;
-  hasEnhanced:   boolean;
-  skipEnhancement?: boolean;
+  onUpload:          (file: File) => void;
+  onEnhance:         () => void;
+  onResizeSave:      (w: number, h: number) => void;
+  canEnhance:        boolean;
+  busyUpload:        boolean;
+  busyEnhance:       boolean;
+  uploadMsg:         string;
+  uploadErr:         string;
+  logoError:         string;
+  hasLogo:           boolean;
+  hasEnhanced:       boolean;
+  skipEnhancement?:  boolean;
+  logoUrl:           string;
+  logoDisplayWidth:  number;
+  logoDisplayHeight: number;
+  originalWidth:     number;
+  originalHeight:    number;
+  logoSecureUrl:     string;
 }
 
 export function LogoUploader({
   onUpload,
   onEnhance,
+  onResizeSave,
   canEnhance,
   busyUpload,
   busyEnhance,
@@ -35,8 +46,15 @@ export function LogoUploader({
   hasLogo,
   hasEnhanced,
   skipEnhancement,
+  logoUrl,
+  logoDisplayWidth,
+  logoDisplayHeight,
+  originalWidth,
+  originalHeight,
+  logoSecureUrl
 }: LogoUploaderProps) {
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const { openResizeModal } = useResizeLogoModal();
 
   function handleDragOver(e: React.DragEvent<HTMLLabelElement>) {
     e.preventDefault();
@@ -55,9 +73,22 @@ export function LogoUploader({
     if (file) onUpload(file);
   }
 
+  function handleResizeClick() {
+    openResizeModal({
+      imageUrl:       logoUrl,
+      secureUrl:      logoSecureUrl,   // ← nuevo — viene del hook
+      originalWidth,
+      originalHeight,
+      currentWidth:   logoDisplayWidth,
+      currentHeight:  logoDisplayHeight,
+      onSave:         onResizeSave,
+    });
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      {/* Drop zone */}
+
+      {/* ── Drop zone ─────────────────────────────────────────── */}
       <FormControl error={!!logoError}>
         <FormLabel>Partner Logo *</FormLabel>
         <label
@@ -93,7 +124,7 @@ export function LogoUploader({
         )}
       </FormControl>
 
-      {/* Status row */}
+      {/* ── Status row ────────────────────────────────────────── */}
       {(busyUpload || busyEnhance || uploadMsg || uploadErr) && (
         <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
           {(busyUpload || busyEnhance) && <CircularProgress size="sm" />}
@@ -112,20 +143,42 @@ export function LogoUploader({
         </Box>
       )}
 
-      {/* AI enhance button */}
-      {hasLogo && !skipEnhancement && (
-        <Button
-          variant="outlined"
-          color="neutral"
-          size="sm"
-          onClick={onEnhance}
-          disabled={!canEnhance}
-          startDecorator={busyEnhance ? <CircularProgress size="sm" /> : undefined}
-          sx={{ alignSelf: "flex-start" }}
-        >
-          {busyEnhance ? "Enhancing…" : "✨ Enhance with AI"}
-        </Button>
+      {/* ── Action buttons (Enhance + Resize) ─────────────────── */}
+      {hasLogo && (
+        <div className="flex items-center gap-2">
+
+          {/* Enhance with AI */}
+          {!skipEnhancement && (
+            <Button
+              variant="outlined"
+              color="neutral"
+              size="sm"
+              onClick={onEnhance}
+              disabled={!canEnhance}
+              startDecorator={
+                busyEnhance
+                  ? <CircularProgress size="sm" />
+                  : <HugeiconsIcon icon={SparklesIcon} size={14} />
+              }
+            >
+              {busyEnhance ? "Enhancing…" : "Enhance with AI"}
+            </Button>
+          )}
+
+          {/* Resize */}
+          <Button
+            variant="outlined"
+            color="neutral"
+            size="sm"
+            onClick={handleResizeClick}
+            disabled={busyUpload || busyEnhance}
+            startDecorator={<HugeiconsIcon icon={SquareArrowExpand01Icon} size={14} />}
+          >
+            Resize
+          </Button>
+        </div>
       )}
+
     </div>
   );
 }

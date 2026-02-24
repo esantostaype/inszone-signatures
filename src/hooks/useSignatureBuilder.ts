@@ -7,13 +7,13 @@ import { toast } from "react-toastify";
 import { buildOutlookSignatureHtml } from "@/lib/outlookSignature";
 import { useInvalidateSignatures } from "@/hooks/useSignatures";
 
-// ── Constants ─────────────────────────────────────────────────
+// ── Constants ─────────────────────────────────────────────────────────────────
 
 export const DEFAULT_LOGO_URL    = "https://inszoneinsurance.com/wp-content/uploads/2026/02/default-logo-1.png";
 export const DEFAULT_LOGO_WIDTH  = 152;
 export const DEFAULT_LOGO_HEIGHT = 44;
 
-// ── Types ─────────────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 type SmartPlan =
   | { kind: "HAS_ALPHA" }
@@ -45,7 +45,7 @@ export type SignatureFormValues = {
   lic:          string;
 };
 
-// ── Validation ────────────────────────────────────────────────
+// ── Validation ────────────────────────────────────────────────────────────────
 
 const schema = Yup.object({
   name:         Yup.string().trim().min(2).required("Signature name is required"),
@@ -57,7 +57,7 @@ const schema = Yup.object({
   lic:          Yup.string().trim().optional(),
 });
 
-// ── Debounce hook ─────────────────────────────────────────────
+// ── Debounce hook ─────────────────────────────────────────────────────────────
 
 function useDebounce<T>(value: T, delay: number): [T, boolean] {
   const [debounced, setDebounced] = React.useState<T>(value);
@@ -72,7 +72,7 @@ function useDebounce<T>(value: T, delay: number): [T, boolean] {
   return [debounced, pending];
 }
 
-// ── Clipboard helper ──────────────────────────────────────────
+// ── Clipboard helper ──────────────────────────────────────────────────────────
 
 async function copyHtmlToClipboard(html: string) {
   const blobHtml = new Blob([html], { type: "text/html" });
@@ -92,25 +92,48 @@ function stripHtml(html: string) {
   return div.innerText || div.textContent || "";
 }
 
-// ── Main hook ─────────────────────────────────────────────────
+// ── Cloudinary URL builder ────────────────────────────────────────────────────
+// Inyecta transformaciones w_X,h_Y,c_fit en la URL de Cloudinary para que
+// el CDN sirva la imagen en la resolución exacta pedida — sin estirar píxeles.
+
+function buildCloudinaryResizedUrl(url: string, w: number, h: number): string {
+  if (!url.includes("res.cloudinary.com")) return url;
+  // https://res.cloudinary.com/cloud/image/upload/v123/file.png
+  // → .../upload/w_90,h_60,c_fit,q_auto,f_auto/v123/file.png
+  return url.replace(
+    /\/upload\/((?:v\d+\/)?)/,
+    (_match, version) => `/upload/w_${w},h_${h},c_fit,q_auto,f_auto/${version}`
+  );
+}
+
+// ── Main hook ─────────────────────────────────────────────────────────────────
 
 export function useSignatureBuilder() {
-  const [uploadedLogo, setUploadedLogo] = React.useState<UploadResult | null>(null);
-  const [enhanced,     setEnhanced]     = React.useState<UploadResult | null>(null);
-  const [rawFile,      setRawFile]      = React.useState<File | null>(null);
-  const [busyUpload,   setBusyUpload]   = React.useState(false);
-  const [busyEnhance,  setBusyEnhance]  = React.useState(false);
-  const [busySave,     setBusySave]     = React.useState(false);
-  const [uploadMsg,    setUploadMsg]    = React.useState("");
-  const [uploadErr,    setUploadErr]    = React.useState("");
-  const [logoError,    setLogoError]    = React.useState("");
-
   const invalidateSignatures = useInvalidateSignatures();
 
-  const activeLogo      = enhanced ?? uploadedLogo;
-  const logoUrl         = activeLogo?.display_url || DEFAULT_LOGO_URL;
-  const logoWidth       = activeLogo?.width        || DEFAULT_LOGO_WIDTH;
-  const logoHeight      = activeLogo?.height       || DEFAULT_LOGO_HEIGHT;
+  const [uploadedLogo,      setUploadedLogo]      = React.useState<UploadResult | null>(null);
+  const [enhanced,          setEnhanced]           = React.useState<UploadResult | null>(null);
+  const [rawFile,           setRawFile]            = React.useState<File | null>(null);
+  const [busyUpload,        setBusyUpload]         = React.useState(false);
+  const [busyEnhance,       setBusyEnhance]        = React.useState(false);
+  const [busySave,          setBusySave]           = React.useState(false);
+  const [uploadMsg,         setUploadMsg]          = React.useState("");
+  const [uploadErr,         setUploadErr]          = React.useState("");
+  const [logoError,         setLogoError]          = React.useState("");
+  const [logoDisplayWidth,  setLogoDisplayWidth]   = React.useState(DEFAULT_LOGO_WIDTH);
+  const [logoDisplayHeight, setLogoDisplayHeight]  = React.useState(DEFAULT_LOGO_HEIGHT);
+  // URL con transformaciones Cloudinary para el tamaño solicitado en resize
+  const [resizedLogoUrl,    setResizedLogoUrl]     = React.useState<string | null>(null);
+
+  const activeLogo = enhanced ?? uploadedLogo;
+  // logoUrl usa la URL resizada (con transformación Cloudinary) si existe, si no la original
+  const logoUrl    = resizedLogoUrl || activeLogo?.display_url || DEFAULT_LOGO_URL;
+  const logoSecureUrl = activeLogo?.secure_url || "";
+  const logoWidth  = logoDisplayWidth;
+  const logoHeight = logoDisplayHeight;
+  // Dimensiones originales del archivo (para el modal de resize)
+  const originalLogoWidth  = activeLogo?.width  || DEFAULT_LOGO_WIDTH;
+  const originalLogoHeight = activeLogo?.height || DEFAULT_LOGO_HEIGHT;
   const hasUploadedLogo = !!activeLogo;
   const isBadge         = uploadedLogo?.plan?.kind === "BADGE";
   const canEnhance      = !!uploadedLogo && !!rawFile && !uploadedLogo.skipEnhancement && !busyEnhance && !busyUpload;
@@ -132,7 +155,7 @@ export function useSignatureBuilder() {
 
   const [debouncedValues, isPending] = useDebounce(formik.values, 800);
 
-  // ── Upload ─────────────────────────────────────────────────
+  // ── Upload ────────────────────────────────────────────────────────────────
 
   async function handleUpload(file: File) {
     setUploadErr("");
@@ -140,6 +163,7 @@ export function useSignatureBuilder() {
     setUploadedLogo(null);
     setEnhanced(null);
     setRawFile(null);
+    setResizedLogoUrl(null); // reset resize al subir nuevo logo
     setUploadMsg("Uploading and processing partner logo…");
     setBusyUpload(true);
 
@@ -157,6 +181,9 @@ export function useSignatureBuilder() {
 
       const json: UploadResult = JSON.parse(text);
       setUploadedLogo(json);
+      setLogoDisplayWidth(json.width   || DEFAULT_LOGO_WIDTH);
+      setLogoDisplayHeight(json.height || DEFAULT_LOGO_HEIGHT);
+
       setUploadMsg(
         json.skipEnhancement
           ? "Logo ready ✓"
@@ -171,12 +198,13 @@ export function useSignatureBuilder() {
     }
   }
 
-  // ── Enhance ────────────────────────────────────────────────
+  // ── Enhance ───────────────────────────────────────────────────────────────
 
   async function handleEnhance() {
     if (!uploadedLogo || !rawFile) return;
     setUploadErr("");
     setBusyEnhance(true);
+    setResizedLogoUrl(null); // reset resize al enhancear
     setUploadMsg("Enhancing logo with AI…");
 
     try {
@@ -189,6 +217,8 @@ export function useSignatureBuilder() {
       if (!res.ok) throw new Error(json?.error || "Enhance failed");
 
       setEnhanced(json);
+      setLogoDisplayWidth(json.width   || DEFAULT_LOGO_WIDTH);
+      setLogoDisplayHeight(json.height || DEFAULT_LOGO_HEIGHT);
       setUploadMsg("Logo enhanced with AI ✓");
     } catch (e: unknown) {
       setUploadErr((e as Error)?.message || "Error enhancing logo");
@@ -198,7 +228,22 @@ export function useSignatureBuilder() {
     }
   }
 
-  // ── Save ───────────────────────────────────────────────────
+  // ── Resize save ───────────────────────────────────────────────────────────
+  // Pide a Cloudinary la imagen en la resolución exacta — no estira píxeles.
+
+  function handleResizeSave(w: number, h: number) {
+    setLogoDisplayWidth(w);
+    setLogoDisplayHeight(h);
+
+    const sourceUrl = activeLogo?.secure_url;
+    if (sourceUrl) {
+      // Genera URL de Cloudinary con las dimensiones exactas
+      const resized = buildCloudinaryResizedUrl(sourceUrl, w, h);
+      setResizedLogoUrl(resized);
+    }
+  }
+
+  // ── Save ──────────────────────────────────────────────────────────────────
 
   async function handleSave() {
     const errors = await formik.validateForm();
@@ -223,9 +268,10 @@ export function useSignatureBuilder() {
         email:             formik.values.email,
         address:           formik.values.address,
         lic:               formik.values.lic || null,
-        partnerLogoUrl:    activeLogo?.display_url  || null,
-        partnerLogoWidth:  activeLogo?.width         || null,
-        partnerLogoHeight: activeLogo?.height        || null,
+        // Guarda la URL resizada (con transformación Cloudinary) si existe
+        partnerLogoUrl:    logoUrl,
+        partnerLogoWidth:  logoDisplayWidth,
+        partnerLogoHeight: logoDisplayHeight,
       };
 
       const res = await fetch("/api/signatures", {
@@ -248,7 +294,7 @@ export function useSignatureBuilder() {
     }
   }
 
-  // ── Copy ───────────────────────────────────────────────────
+  // ── Copy ──────────────────────────────────────────────────────────────────
 
   async function handleCopy() {
     if (!hasUploadedLogo) {
@@ -256,7 +302,6 @@ export function useSignatureBuilder() {
       return;
     }
 
-    // Valida todo EXCEPTO "name"
     const errors = await formik.validateForm();
     const errorsWithoutName = Object.fromEntries(
       Object.entries(errors).filter(([key]) => key !== "name")
@@ -276,9 +321,10 @@ export function useSignatureBuilder() {
       email:             debouncedValues.email,
       address:           debouncedValues.address,
       lic:               debouncedValues.lic || undefined,
-      partnerLogoUrl:    activeLogo?.display_url,
-      partnerLogoWidth:  activeLogo?.width,
-      partnerLogoHeight: activeLogo?.height,
+      // Usa la URL resizada (Cloudinary sirve la imagen a la resolución correcta)
+      partnerLogoUrl:    logoUrl,
+      partnerLogoWidth:  logoDisplayWidth,
+      partnerLogoHeight: logoDisplayHeight,
       signatureType:     "powered-by",
     });
 
@@ -293,8 +339,13 @@ export function useSignatureBuilder() {
     uploadedLogo,
     enhanced,
     logoUrl,
+    logoSecureUrl,
     logoWidth,
     logoHeight,
+    originalLogoWidth,
+    originalLogoHeight,
+    logoDisplayWidth,
+    logoDisplayHeight,
     hasUploadedLogo,
     canEnhance,
     logoLoading,
@@ -307,6 +358,7 @@ export function useSignatureBuilder() {
     setLogoError,
     handleUpload,
     handleEnhance,
+    handleResizeSave,
     handleSave,
     handleCopy,
   };
