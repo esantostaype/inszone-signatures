@@ -103,19 +103,32 @@ export function buildOutlookSignatureHtml(input: SignatureInput): string {
         ${contactLines}<br>
         <a href="mailto:${email}" style="color:#6F8CC0;text-decoration:underline">${email}</a>
       </p>
-      <p style="margin:12px 0 0;color:#364153;">${address}</p>
+      <p style="margin:12px 0 0;color:#364153;">${address} aaa</p>
       ${lic ? `<p style="margin:12px 0 0;letter-spacing:1.5pt;">${lic}</p>` : ""}
-      <p style="margin:12px 0 0;">
-        <a href="https://www.facebook.com/InszoneInsuranceServices/" target="_blank" style="display:inline;text-decoration:none;">
-          <img src="${FACEBOOK_URL}" alt="Facebook" style="display:inline">
-        </a>
-        <a href="https://twitter.com/InszoneIns" target="_blank" style="display:inline;text-decoration:none;">
-          <img src="${TWITTER_URL}" alt="Twitter" style="display:inline">
-        </a>
-        <a href="https://www.linkedin.com/company/inszone-insurance-services-inc-" target="_blank" style="display:inline;text-decoration:none;">
-          <img src="${LINKEDIN_URL}" alt="Linkedin" style="display:inline">
-        </a>
-      </p>
+        <table cellpadding="0" cellspacing="0" border="0" style="margin-top:12px; display:inline-table;border-collapse:collapse;">
+          <tr>
+            <td style="padding:0;">
+              <a href="https://www.facebook.com/InszoneInsuranceServices/"
+                target="_blank" style="text-decoration:none;">
+                <img src="${FACEBOOK_URL}" alt="Facebook" style="display:block;border:0;">
+              </a>
+            </td>
+            <td style="width:4px;"></td>
+            <td style="padding:0;">
+              <a href="https://twitter.com/InszoneIns"
+                target="_blank" style="text-decoration:none;">
+                <img src="${TWITTER_URL}" alt="Twitter" style="display:block;border:0;">
+              </a>
+            </td>
+            <td style="width:4px;"></td>
+            <td style="padding:0;">
+              <a href="https://www.linkedin.com/company/inszone-insurance-services-inc-"
+                target="_blank" style="text-decoration:none;">
+                <img src="${LINKEDIN_URL}" alt="Linkedin" style="display:block;border:0;">
+              </a>
+            </td>
+          </tr>
+        </table>
     </td>
 
     <!-- RIGHT COLUMN -->
