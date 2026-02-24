@@ -103,7 +103,7 @@ export function buildOutlookSignatureHtml(input: SignatureInput): string {
         ${contactLines}<br>
         <a href="mailto:${email}" style="color:#6F8CC0;text-decoration:underline">${email}</a>
       </p>
-      <p style="margin:12px 0 0;color:#364153;">${address} aaa</p>
+      <p style="margin:12px 0 0;color:#364153;">${address}</p>
       ${lic ? `<p style="margin:12px 0 0;letter-spacing:1.5pt;">${lic}</p>` : ""}
         <table cellpadding="0" cellspacing="0" border="0" style="margin-top:12px; display:inline-table;border-collapse:collapse;">
           <tr>
