@@ -377,27 +377,29 @@ export function useSignatureBuilder() {
   // ── Copy ──────────────────────────────────────────────────────────────────
 
   async function handleCopy() {
-    if (!hasUploadedLogo) {
-      setLogoError("Please upload a partner logo before copying");
-      return;
-    }
-
     const errors = await formik.validateForm();
-    const errorsWithoutName = Object.fromEntries(
-      Object.entries(errors).filter(([key]) => key !== "name")
+  const errorsWithoutName = Object.fromEntries(
+    Object.entries(errors).filter(([key]) => key !== "name")
+  );
+
+  if (Object.keys(errorsWithoutName).length > 0) {
+    formik.setTouched(
+      Object.fromEntries(Object.keys(errorsWithoutName).map((k) => [k, true]))
     );
+  }
 
-    if (Object.keys(errorsWithoutName).length > 0) {
-      formik.setTouched(
-        Object.fromEntries(Object.keys(errorsWithoutName).map((k) => [k, true]))
-      );
-      return;
-    }
+  if (!hasUploadedLogo) {
+    setLogoError("Please upload a partner logo before copying");
+  }
 
-    const contactLines = [
-      `Phone: ${debouncedValues.phone}`,
-      debouncedValues.fax ? `Fax: ${debouncedValues.fax}` : null,
-    ].filter(Boolean).join("\n");
+  // Solo bloquea si hay cualquier error
+  if (Object.keys(errorsWithoutName).length > 0 || !hasUploadedLogo) return;
+
+  // ... resto del copy sin cambios
+  const contactLines = [
+    `Phone: ${debouncedValues.phone}`,
+    debouncedValues.fax ? `Fax: ${debouncedValues.fax}` : null,
+  ].filter(Boolean).join("\n");
 
     const html = buildOutlookSignatureHtml({
       fullName:          debouncedValues.fullName,
