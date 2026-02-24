@@ -23,6 +23,8 @@ export interface SavedSignature {
   name:              string;
   fullName:          string;
   title:             string;
+  phone:             string | null;   // ← agrega
+  fax:               string | null;   // ← agrega
   contactLines:      string;
   email:             string;
   address:           string;
@@ -53,12 +55,42 @@ function stripHtml(html: string) {
   return div.innerText || div.textContent || "";
 }
 
+async function triggerLetterheadDownload(row: SavedSignature): Promise<void> {
+  const res = await fetch("/api/letterhead", {
+    method:  "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      partnerName:       row.name,
+      phone:             row.phone             || "",
+      fax:               row.fax               || "",
+      address:           row.address,
+      website:           "",
+      partnerLogoUrl:    row.partnerLogoUrl    || "",
+      partnerLogoWidth:  row.partnerLogoWidth  || 152,
+      partnerLogoHeight: row.partnerLogoHeight || 44,
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { message?: string }).message || "Letterhead generation failed");
+  }
+
+  const blob   = await res.blob();
+  const url    = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href     = url;
+  anchor.download = `INS-Branding-Letterhead-Acquisition-${row.name.trim().split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join("-")}.docx`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
 // ── Signature Preview content (inside modal) ──────────────────
 
 function SignaturePreviewContent({ row }: { row: SavedSignature }) {
-  // Parse "Phone: (123) 456-7890\nFax: (123) 456-7890" back into separate fields
-  const phone = row.contactLines.match(/Phone:\s*(.+)/)?.[1]?.trim() ?? "";
-  const fax   = row.contactLines.match(/Fax:\s*(.+)/)?.[1]?.trim()   ?? "";
+  const contactLines = row.contactLines ?? "";
+  const phone = row.phone?.trim() || contactLines.match(/Phone:\s*(.+)/)?.[1]?.trim() || "";
+  const fax   = row.fax?.trim()   || contactLines.match(/Fax:\s*(.+)/)?.[1]?.trim()   || "";
 
   return (
     <SignaturePreview
@@ -68,10 +100,10 @@ function SignaturePreviewContent({ row }: { row: SavedSignature }) {
         title:    row.title,
         phone,
         fax,
-        email:    row.email,
-        address:  row.address,
-        website:  "",
-        lic:      row.lic ?? "",
+        email:   row.email,
+        address: row.address,
+        website: "",
+        lic:     row.lic ?? "",
       }}
       logoUrl={row.partnerLogoUrl    ?? ""}
       logoWidth={row.partnerLogoWidth  ?? 96}
@@ -93,6 +125,19 @@ interface RowActionsProps {
 function RowActions({ row, onDelete }: RowActionsProps) {
   const { openModal } = useModalStore();
   const [copying, setCopying] = React.useState<"powered-by" | "formerly" | null>(null);
+  const [downloading,  setDownloading]  = React.useState(false);
+
+  async function handleDownloadLetterhead() {
+    setDownloading(true);
+    try {
+      await triggerLetterheadDownload(row);
+      toast.success("Letterhead downloaded!");
+    } catch (e: unknown) {
+      toast.error((e as Error)?.message || "Failed to download letterhead");
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   function handlePreview() {
     openModal({
@@ -103,37 +148,43 @@ function RowActions({ row, onDelete }: RowActionsProps) {
   }
 
   async function handleCopy(type: "powered-by" | "formerly") {
-    setCopying(type);
-    try {
-      const html = buildOutlookSignatureHtml({
-        fullName:          row.fullName,
-        title:             row.title,
-        contactLines:      row.contactLines,
-        email:             row.email,
-        address:           row.address,
-        lic:               row.lic ?? undefined,
-        partnerLogoUrl:    row.partnerLogoUrl    ?? undefined,
-        partnerLogoWidth:  row.partnerLogoWidth  ?? undefined,
-        partnerLogoHeight: row.partnerLogoHeight ?? undefined,
-        signatureType:     type,
-      });
-      await copyHtmlToClipboard(html);
-      toast.success(
-        type === "powered-by" ? "Powered By signature copied!" : "Formerly signature copied!"
-      );
-    } catch {
-      toast.error("Failed to copy signature");
-    } finally {
-      setCopying(null);
-    }
+  setCopying(type);
+  try {
+    const contactLines = [
+      row.phone ? `Phone: ${row.phone}` : null,
+      row.fax   ? `Fax: ${row.fax}`     : null,
+    ].filter(Boolean).join("\n");
+
+    const html = buildOutlookSignatureHtml({
+      fullName:          row.fullName,
+      title:             row.title,
+      contactLines,
+      email:             row.email,
+      address:           row.address,
+      lic:               row.lic ?? undefined,
+      partnerLogoUrl:    row.partnerLogoUrl    ?? undefined,
+      partnerLogoWidth:  row.partnerLogoWidth  ?? undefined,
+      partnerLogoHeight: row.partnerLogoHeight ?? undefined,
+      signatureType:     type,
+    });
+
+    await copyHtmlToClipboard(html);
+    toast.success(
+      type === "powered-by" ? "Powered By signature copied!" : "Formerly signature copied!"
+    );
+  } catch {
+    toast.error("Failed to copy signature");
+  } finally {
+    setCopying(null);
   }
+}
 
   return (
     <div className="flex items-center gap-2 flex-nowrap">
       <Button
         size="sm"
         variant="soft"
-        color="success"
+        color="primary"
         onClick={handlePreview}
         startDecorator={<HugeiconsIcon icon={EyeIcon} size={14} />}
         sx={{ whiteSpace: "nowrap", fontSize: 11 }}
@@ -144,7 +195,7 @@ function RowActions({ row, onDelete }: RowActionsProps) {
       <Button
         size="sm"
         variant="soft"
-        color="primary"
+        color="neutral"
         onClick={() => handleCopy("powered-by")}
         disabled={copying !== null}
         startDecorator={
@@ -172,6 +223,14 @@ function RowActions({ row, onDelete }: RowActionsProps) {
       >
         Copy Formerly
       </Button>
+
+      <Button size="sm" variant="soft" color="neutral" onClick={handleDownloadLetterhead}
+        disabled={copying !== null || downloading}
+        loading={downloading}
+        sx={{ whiteSpace: "nowrap", fontSize: 11 }}>
+        {downloading ? "Generating…" : "Download Letterhead"}
+      </Button>
+
 
       <Button
         size="sm"
