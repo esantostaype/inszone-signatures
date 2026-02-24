@@ -42,6 +42,8 @@ export function SignatureForm({ state }: SignatureFormProps) {
     handleResizeSave,
     handleSave,
     handleCopy,
+    handlePhoneChange,
+    handleFaxChange,
   } = state;
 
   const { values, errors, touched, handleChange, handleBlur } = formik;
@@ -100,34 +102,30 @@ export function SignatureForm({ state }: SignatureFormProps) {
           )}
         </FormControl>
 
-        {/* Contact Lines */}
-        <FormControl error={Boolean(touched.contactLines && errors.contactLines)}>
-          <FormLabel>Contact Lines *</FormLabel>
-          <Textarea
-            name="contactLines"
-            minRows={2}
-            value={values.contactLines}
-            onChange={handleChange}
+        <FormControl error={Boolean(touched.phone && errors.phone)}>
+          <FormLabel>Phone *</FormLabel>
+          <Input
+            name="phone"
+            placeholder="(479) 394-2244"
+            value={values.phone}
+            onChange={handlePhoneChange}
             onBlur={handleBlur}
           />
-          {touched.contactLines && errors.contactLines && (
-            <Typography level="body-xs" color="danger">{errors.contactLines}</Typography>
+          {touched.phone && errors.phone && (
+            <Typography level="body-xs" color="danger">{errors.phone}</Typography>
           )}
         </FormControl>
 
-        {/* Address */}
-        <FormControl error={Boolean(touched.address && errors.address)}>
-          <FormLabel>Address *</FormLabel>
-          <Textarea
-            name="address"
-            minRows={2}
-            value={values.address}
-            onChange={handleChange}
+        {/* Fax */}
+        <FormControl>
+          <FormLabel>Fax (optional)</FormLabel>
+          <Input
+            name="fax"
+            placeholder="(479) 394-2249"
+            value={values.fax}
+            onChange={handleFaxChange}
             onBlur={handleBlur}
           />
-          {touched.address && errors.address && (
-            <Typography level="body-xs" color="danger">{errors.address}</Typography>
-          )}
         </FormControl>
 
         {/* Email */}
@@ -157,34 +155,60 @@ export function SignatureForm({ state }: SignatureFormProps) {
           />
         </FormControl>
 
+        {/* Address */}
+        <FormControl error={Boolean(touched.address && errors.address)} className="col-span-2">
+          <FormLabel>Address *</FormLabel>
+          <Textarea
+            name="address"
+            minRows={2}
+            value={values.address}
+            onChange={handleChange}
+            onBlur={handleBlur}
+          />
+          {touched.address && errors.address && (
+            <Typography level="body-xs" color="danger">{errors.address}</Typography>
+          )}
+        </FormControl>
+
+        {/* Website */}
+        <FormControl className="col-span-2">
+          <FormLabel>Website (optional)</FormLabel>
+          <Input
+            name="website"
+            placeholder="e.g. cayias.com"
+            value={values.website}
+            onChange={handleChange}
+            onBlur={handleBlur}
+          />
+        </FormControl>
+
         {/* Partner Logo — col span 2 */}
         <div className="col-span-2">
-          <div className="col-span-2">
-            <LogoUploader
-              onUpload={handleUpload}
-              onEnhance={handleEnhance}
-              onResizeSave={handleResizeSave}
-              canEnhance={canEnhance}
-              busyUpload={busyUpload}
-              busyEnhance={busyEnhance}
-              uploadMsg={uploadMsg}
-              uploadErr={uploadErr}
-              logoError={logoError}
-              hasLogo={hasUploadedLogo}
-              hasEnhanced={!!enhanced}
-              skipEnhancement={uploadedLogo?.skipEnhancement}
-              logoUrl={logoUrl}
-              logoSecureUrl={logoSecureUrl}
-              logoDisplayWidth={logoDisplayWidth}
-              logoDisplayHeight={logoDisplayHeight}
-              originalWidth={originalLogoWidth}
-              originalHeight={originalLogoHeight}
-            />
-          </div>
+          <LogoUploader
+            onUpload={handleUpload}
+            onEnhance={handleEnhance}
+            onResizeSave={handleResizeSave}
+            canEnhance={canEnhance}
+            busyUpload={busyUpload}
+            busyEnhance={busyEnhance}
+            uploadMsg={uploadMsg}
+            uploadErr={uploadErr}
+            logoError={logoError}
+            hasLogo={hasUploadedLogo}
+            hasEnhanced={!!enhanced}
+            skipEnhancement={uploadedLogo?.skipEnhancement}
+            logoUrl={logoUrl}
+            logoSecureUrl={logoSecureUrl}
+            logoDisplayWidth={logoDisplayWidth}
+            logoDisplayHeight={logoDisplayHeight}
+            originalWidth={originalLogoWidth}
+            originalHeight={originalLogoHeight}
+          />
         </div>
       </div>
 
       {/* ── Actions ─────────────────────────────────────────── */}
+      {/* Save Signature also auto-downloads the letterhead */}
       <SignatureActions
         onSave={handleSave}
         onCopy={handleCopy}

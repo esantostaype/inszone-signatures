@@ -25,12 +25,13 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
 
     const {
-      name, fullName, title, contactLines,
-      email, address, lic,
+      name, fullName, title,
+      phone, fax,                // ← antes: contactLines
+      email, address, lic, website,
       partnerLogoUrl, partnerLogoWidth, partnerLogoHeight,
     } = body;
 
-    if (!name || !fullName || !title || !contactLines || !email || !address) {
+    if (!name || !fullName || !title || !phone || !email || !address) {  // ← contactLines → phone
       return NextResponse.json(
         { success: false, message: "Missing required fields" },
         { status: 400 }
@@ -42,10 +43,12 @@ export async function POST(request: NextRequest) {
       name:              name.trim(),
       fullName:          fullName.trim(),
       title:             title.trim(),
-      contactLines:      contactLines.trim(),
+      phone:             phone.trim(),       // ← antes: contactLines
+      fax:               fax?.trim() || null, // ← nuevo (opcional)
       email:             email.trim(),
       address:           address.trim(),
       lic:               lic?.trim() || null,
+      website:           website?.trim() || null,
       partnerLogoUrl:    partnerLogoUrl    || null,
       partnerLogoWidth:  partnerLogoWidth  ? Number(partnerLogoWidth)  : null,
       partnerLogoHeight: partnerLogoHeight ? Number(partnerLogoHeight) : null,

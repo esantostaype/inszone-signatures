@@ -39,9 +39,11 @@ export type SignatureFormValues = {
   name:         string;
   fullName:     string;
   title:        string;
-  contactLines: string;
+  phone:        string;
+  fax:          string;
   email:        string;
   address:      string;
+  website:      string;
   lic:          string;
 };
 
@@ -51,9 +53,11 @@ const schema = Yup.object({
   name:         Yup.string().trim().min(2).required("Signature name is required"),
   fullName:     Yup.string().trim().min(2).required("Full name is required"),
   title:        Yup.string().trim().min(2).required("Job title is required"),
-  contactLines: Yup.string().trim().min(2).required("Contact lines are required"),
+  phone:        Yup.string().trim().min(2).required("Phone is required"),
+  fax:          Yup.string().trim().optional(),
   email:        Yup.string().trim().email("Invalid email").required("Email is required"),
   address:      Yup.string().trim().min(2).required("Address is required"),
+  website:      Yup.string().trim().optional(),
   lic:          Yup.string().trim().optional(),
 });
 
@@ -92,18 +96,63 @@ function stripHtml(html: string) {
   return div.innerText || div.textContent || "";
 }
 
+// ── Phone formatter ───────────────────────────────────────────────────────────
+// Formats any digit input to (123) 456-7890
+export function formatPhone(raw: string): string {
+  // Strip all non-digit characters
+  const digits = raw.replace(/\D/g, "").slice(0, 10);
+  if (digits.length === 0) return "";
+  if (digits.length <= 3) return `(${digits}`;
+  if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+  return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+}
+
 // ── Cloudinary URL builder ────────────────────────────────────────────────────
-// Inyecta transformaciones w_X,h_Y,c_fit en la URL de Cloudinary para que
-// el CDN sirva la imagen en la resolución exacta pedida — sin estirar píxeles.
 
 function buildCloudinaryResizedUrl(url: string, w: number, h: number): string {
   if (!url.includes("res.cloudinary.com")) return url;
-  // https://res.cloudinary.com/cloud/image/upload/v123/file.png
-  // → .../upload/w_90,h_60,c_fit,q_auto,f_auto/v123/file.png
   return url.replace(
     /\/upload\/((?:v\d+\/)?)/,
     (_match, version) => `/upload/w_${w},h_${h},c_fit,q_auto,f_auto/${version}`
   );
+}
+
+// ── Letterhead download helper ────────────────────────────────────────────────
+
+async function triggerLetterheadDownload(payload: {
+  partnerName:       string;
+  phone:             string;
+  fax:               string;
+  address:           string;
+  website:           string;
+  partnerLogoUrl:    string;
+  partnerLogoWidth:  number;
+  partnerLogoHeight: number;
+}): Promise<void> {
+  const res = await fetch("/api/letterhead", {
+    method:  "POST",
+    headers: { "Content-Type": "application/json" },
+    body:    JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { message?: string }).message || "Letterhead generation failed");
+  }
+
+  const blob     = await res.blob();
+  const url      = URL.createObjectURL(blob);
+  const anchor   = document.createElement("a");
+  const safeName = payload.partnerName
+    .trim()
+    .split(/\s+/)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join("-");
+
+  anchor.href     = url;
+  anchor.download = `INS-Branding-Letterhead-Acquisition-${safeName}.docx`;
+  anchor.click();
+  URL.revokeObjectURL(url);
 }
 
 // ── Main hook ─────────────────────────────────────────────────────────────────
@@ -122,16 +171,13 @@ export function useSignatureBuilder() {
   const [logoError,         setLogoError]          = React.useState("");
   const [logoDisplayWidth,  setLogoDisplayWidth]   = React.useState(DEFAULT_LOGO_WIDTH);
   const [logoDisplayHeight, setLogoDisplayHeight]  = React.useState(DEFAULT_LOGO_HEIGHT);
-  // URL con transformaciones Cloudinary para el tamaño solicitado en resize
   const [resizedLogoUrl,    setResizedLogoUrl]     = React.useState<string | null>(null);
 
   const activeLogo = enhanced ?? uploadedLogo;
-  // logoUrl usa la URL resizada (con transformación Cloudinary) si existe, si no la original
   const logoUrl    = resizedLogoUrl || activeLogo?.display_url || DEFAULT_LOGO_URL;
   const logoSecureUrl = activeLogo?.secure_url || "";
   const logoWidth  = logoDisplayWidth;
   const logoHeight = logoDisplayHeight;
-  // Dimensiones originales del archivo (para el modal de resize)
   const originalLogoWidth  = activeLogo?.width  || DEFAULT_LOGO_WIDTH;
   const originalLogoHeight = activeLogo?.height || DEFAULT_LOGO_HEIGHT;
   const hasUploadedLogo = !!activeLogo;
@@ -144,9 +190,11 @@ export function useSignatureBuilder() {
       name:         "",
       fullName:     "Reinalyn Bancifra",
       title:        "Marketing Coordinator",
-      contactLines: "Phone: 479-394-2244\nFax: 479-394-2249",
+      phone:        "(479) 394-2244",
+      fax:          "(479) 394-2249",
       email:        "rbancifra@inszoneins.com",
       address:      "206 Highway 71 N.\nMena, AR 71953",
+      website:      "",
       lic:          "LIC OK#108343",
     },
     validationSchema: schema,
@@ -154,6 +202,18 @@ export function useSignatureBuilder() {
   });
 
   const [debouncedValues, isPending] = useDebounce(formik.values, 800);
+
+  // ── Phone/Fax formatting handlers ────────────────────────────────────────
+
+  function handlePhoneChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const formatted = formatPhone(e.target.value);
+    formik.setFieldValue("phone", formatted);
+  }
+
+  function handleFaxChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const formatted = formatPhone(e.target.value);
+    formik.setFieldValue("fax", formatted);
+  }
 
   // ── Upload ────────────────────────────────────────────────────────────────
 
@@ -163,7 +223,7 @@ export function useSignatureBuilder() {
     setUploadedLogo(null);
     setEnhanced(null);
     setRawFile(null);
-    setResizedLogoUrl(null); // reset resize al subir nuevo logo
+    setResizedLogoUrl(null);
     setUploadMsg("Uploading and processing partner logo…");
     setBusyUpload(true);
 
@@ -204,7 +264,7 @@ export function useSignatureBuilder() {
     if (!uploadedLogo || !rawFile) return;
     setUploadErr("");
     setBusyEnhance(true);
-    setResizedLogoUrl(null); // reset resize al enhancear
+    setResizedLogoUrl(null);
     setUploadMsg("Enhancing logo with AI…");
 
     try {
@@ -229,7 +289,6 @@ export function useSignatureBuilder() {
   }
 
   // ── Resize save ───────────────────────────────────────────────────────────
-  // Pide a Cloudinary la imagen en la resolución exacta — no estira píxeles.
 
   function handleResizeSave(w: number, h: number) {
     setLogoDisplayWidth(w);
@@ -237,13 +296,12 @@ export function useSignatureBuilder() {
 
     const sourceUrl = activeLogo?.secure_url;
     if (sourceUrl) {
-      // Genera URL de Cloudinary con las dimensiones exactas
       const resized = buildCloudinaryResizedUrl(sourceUrl, w, h);
       setResizedLogoUrl(resized);
     }
   }
 
-  // ── Save ──────────────────────────────────────────────────────────────────
+  // ── Save (+ auto-download letterhead) ────────────────────────────────────
 
   async function handleSave() {
     const errors = await formik.validateForm();
@@ -264,11 +322,12 @@ export function useSignatureBuilder() {
         name:              formik.values.name,
         fullName:          formik.values.fullName,
         title:             formik.values.title,
-        contactLines:      formik.values.contactLines,
+        phone:             formik.values.phone,
+        fax:               formik.values.fax || null,
         email:             formik.values.email,
         address:           formik.values.address,
         lic:               formik.values.lic || null,
-        // Guarda la URL resizada (con transformación Cloudinary) si existe
+        website:           formik.values.website || null,
         partnerLogoUrl:    logoUrl,
         partnerLogoWidth:  logoDisplayWidth,
         partnerLogoHeight: logoDisplayHeight,
@@ -287,6 +346,27 @@ export function useSignatureBuilder() {
 
       toast.success("Signature saved!");
       invalidateSignatures();
+
+      // ── Auto-download letterhead after successful save ──────────────────
+      if (hasUploadedLogo) {
+        try {
+          await triggerLetterheadDownload({
+            partnerName:       formik.values.name || formik.values.fullName,
+            phone:             formik.values.phone,
+            fax:               formik.values.fax || "",
+            address:           formik.values.address,
+            website:           formik.values.website || "",
+            // Usa secure_url sin transforms para que el docx tenga la imagen original
+            partnerLogoUrl:    activeLogo?.secure_url || logoUrl,
+            partnerLogoWidth:  logoDisplayWidth,
+            partnerLogoHeight: logoDisplayHeight,
+          });
+          toast.success("Letterhead downloaded!");
+        } catch (e: unknown) {
+          // No falla el save si el letterhead falla — solo muestra warning
+          toast.warn((e as Error)?.message || "Signature saved but letterhead download failed");
+        }
+      }
     } catch (e: unknown) {
       toast.error((e as Error)?.message || "Error saving signature");
     } finally {
@@ -314,14 +394,18 @@ export function useSignatureBuilder() {
       return;
     }
 
+    const contactLines = [
+      `Phone: ${debouncedValues.phone}`,
+      debouncedValues.fax ? `Fax: ${debouncedValues.fax}` : null,
+    ].filter(Boolean).join("\n");
+
     const html = buildOutlookSignatureHtml({
       fullName:          debouncedValues.fullName,
       title:             debouncedValues.title,
-      contactLines:      debouncedValues.contactLines,
+      contactLines,
       email:             debouncedValues.email,
       address:           debouncedValues.address,
       lic:               debouncedValues.lic || undefined,
-      // Usa la URL resizada (Cloudinary sirve la imagen a la resolución correcta)
       partnerLogoUrl:    logoUrl,
       partnerLogoWidth:  logoDisplayWidth,
       partnerLogoHeight: logoDisplayHeight,
@@ -361,5 +445,7 @@ export function useSignatureBuilder() {
     handleResizeSave,
     handleSave,
     handleCopy,
+    handlePhoneChange,
+    handleFaxChange,
   };
 }

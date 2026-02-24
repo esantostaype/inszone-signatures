@@ -45,9 +45,16 @@ interface SignatureTableProps {
 function SignatureTable({ values, logoUrl, logoWidth, logoHeight, isDark, logoLoading }: SignatureTableProps) {
   const c = getPreviewColors(isDark);
 
-  const contactLines = values.contactLines.trim().split("\n").map((line, i) => (
-    <React.Fragment key={i}>{line}<br /></React.Fragment>
-  ));
+  // Cada línea como elemento separado con <br> — igual que addressLines
+  const contactLineElements = [
+    values.phone ? `Phone: ${values.phone}` : null,
+    values.fax   ? `Fax: ${values.fax}`     : null,
+  ]
+    .filter(Boolean)
+    .map((line, i) => (
+      <React.Fragment key={i}>{line}<br /></React.Fragment>
+    ));
+
   const addressLines = values.address.trim().split("\n").map((line, i) => (
     <React.Fragment key={i}>{line}<br /></React.Fragment>
   ));
@@ -71,7 +78,7 @@ function SignatureTable({ values, logoUrl, logoWidth, logoHeight, isDark, logoLo
               {(values.title || "Job Title").toUpperCase()}
             </p>
             <p style={{ margin: "12px 0 0", color: c.textColor }}>
-              {contactLines}
+              {contactLineElements}
               <a href={`mailto:${values.email}`} style={{ color: c.linkColor, textDecoration: "underline" }}>
                 {values.email || "email@example.com"}
               </a>
@@ -150,7 +157,7 @@ interface SignaturePreviewProps {
   logoHeight:  number;
   logoLoading: boolean;
   isPending:   boolean;
-  withTitle?:   boolean;
+  withTitle?:  boolean;
 }
 
 export function SignaturePreview({
@@ -163,7 +170,6 @@ export function SignaturePreview({
     setMounted(true);
   }, []);
 
-  // Antes de montar, usa dark como default para evitar el flash blanco
   const isDark = mounted
     ? mode === "dark" || (mode === "system" && systemMode === "dark")
     : true;
@@ -174,7 +180,7 @@ export function SignaturePreview({
       padding: "32px 32px 48px",
       flex: 1,
       overflow: "hidden",
-      transition: mounted ? "background 0.2s ease" : "none", // evita transición en el primer render
+      transition: mounted ? "background 0.2s ease" : "none",
     }}>
       {withTitle && (
         <Box sx={{ display: "flex", alignItems: "center", gap: 3, mb: 4 }}>
