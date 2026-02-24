@@ -106,7 +106,7 @@ export function SignatureForm({ state }: SignatureFormProps) {
           <FormLabel>Phone *</FormLabel>
           <Input
             name="phone"
-            placeholder="(479) 394-2244"
+            placeholder="e.g. (479) 394-2244"
             value={values.phone}
             onChange={handlePhoneChange}
             onBlur={handleBlur}
@@ -121,7 +121,7 @@ export function SignatureForm({ state }: SignatureFormProps) {
           <FormLabel>Fax (optional)</FormLabel>
           <Input
             name="fax"
-            placeholder="(479) 394-2249"
+            placeholder="e.g. (479) 394-2249"
             value={values.fax}
             onChange={handleFaxChange}
             onBlur={handleBlur}
@@ -161,6 +161,7 @@ export function SignatureForm({ state }: SignatureFormProps) {
           <Textarea
             name="address"
             minRows={2}
+            placeholder={"e.g. 206 Highway 71 N.\nMena, AR 71953"}
             value={values.address}
             onChange={handleChange}
             onBlur={handleBlur}
