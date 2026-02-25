@@ -78,7 +78,7 @@ function buildRightColumn(
 
 export function buildOutlookSignatureHtml(input: SignatureInput): string {
   const fullName = esc(input.fullName.trim());
-  const title = esc(input.title.trim()).toUpperCase();
+  const title = nl2br(input.title.trim()).toUpperCase();
   const contactLines = nl2br((input.contactLines ?? "").trim());
   const email = esc(input.email.trim());
   const address = nl2br((input.address ?? "").trim());
@@ -97,8 +97,8 @@ export function buildOutlookSignatureHtml(input: SignatureInput): string {
   <tr>
     <!-- LEFT COLUMN -->
     <td valign="top" style="text-align:right;padding-right:16px;border-right:2px solid #6F8CC0;">
-      <p style="margin:0 0 2px;font-size:18px;color:#6F8CC0;"><b>${fullName}</b></p>
-      <p style="margin:0;color:#364153;">${title}</p>
+      <p style="margin:0 0 4px;font-size:19px;color:#6F8CC0;"><b>${fullName}</b></p>
+      <p style="margin:0;color:#364153; line-height:12px;">${title}</p>
       <p style="margin:12px 0 0;color:#364153;">
         ${contactLines}<br>
         <a href="mailto:${email}" style="color:#6F8CC0;text-decoration:underline">${email}</a>

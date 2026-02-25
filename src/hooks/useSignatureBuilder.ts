@@ -22,6 +22,18 @@ type SmartPlan =
   | { kind: "SVG" }
   | { kind: "BADGE" };
 
+export const FIELD_MAX_LENGTH = {
+  name:     64,
+  fullName:  32,
+  title:     32,
+  phone:     14,
+  fax:       14,
+  email:    32,
+  address:  64,
+  website:  32,
+  lic:       16,
+} as const;
+
 export type UploadResult = {
   public_id:        string;
   secure_url:       string;
@@ -50,15 +62,21 @@ export type SignatureFormValues = {
 // ── Validation ────────────────────────────────────────────────────────────────
 
 const schema = Yup.object({
-  name:         Yup.string().trim().min(2).required("Signature name is required"),
-  fullName:     Yup.string().trim().min(2).required("Full name is required"),
-  title:        Yup.string().trim().min(2).required("Job title is required"),
-  phone:        Yup.string().trim().min(2).required("Phone is required"),
-  fax:          Yup.string().trim().optional(),
-  email:        Yup.string().trim().email("Invalid email").required("Email is required"),
-  address:      Yup.string().trim().min(2).required("Address is required"),
-  website:      Yup.string().trim().optional(),
-  lic:          Yup.string().trim().optional(),
+  name:     Yup.string().trim().min(2).max(FIELD_MAX_LENGTH.name, `Max ${FIELD_MAX_LENGTH.name} characters`).required("Signature name is required"),
+  fullName: Yup.string().trim().min(2).max(FIELD_MAX_LENGTH.fullName, `Max ${FIELD_MAX_LENGTH.fullName} characters`).required("Full name is required"),
+  title:    Yup.string().trim().min(2).max(FIELD_MAX_LENGTH.title, `Max ${FIELD_MAX_LENGTH.title} characters`).required("Job title is required"),
+  phone:    Yup.string().trim().min(2).max(FIELD_MAX_LENGTH.phone).required("Phone is required"),
+  fax:      Yup.string().trim().max(FIELD_MAX_LENGTH.fax).optional(),
+  email:    Yup.string().trim().email("Invalid email").max(FIELD_MAX_LENGTH.email, `Max ${FIELD_MAX_LENGTH.email} characters`).required("Email is required"),
+  address:  Yup.string().trim().min(2)
+    .max(FIELD_MAX_LENGTH.address, `Max ${FIELD_MAX_LENGTH.address} characters`)
+    .test("max-lines", "Address can have at most 2 lines", (val) => {
+      if (!val) return true;
+      return (val.match(/\n/g) || []).length < 2;
+    })
+    .required("Address is required"),
+  website:  Yup.string().trim().max(FIELD_MAX_LENGTH.website, `Max ${FIELD_MAX_LENGTH.website} characters`).optional(),
+  lic:      Yup.string().trim().max(FIELD_MAX_LENGTH.lic, `Max ${FIELD_MAX_LENGTH.lic} characters`).optional(),
 });
 
 // ── Debounce hook ─────────────────────────────────────────────────────────────
@@ -418,6 +436,16 @@ export function useSignatureBuilder() {
     toast.success("Signature copied!");
   }
 
+  function handleAddressChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
+    const val = e.target.value;
+    const lines = val.split("\n");
+    // Block a 3rd line from being typed
+    if (lines.length > 2) return;
+    // Also respect overall char limit
+    if (val.length > FIELD_MAX_LENGTH.address) return;
+    formik.setFieldValue("address", val);
+  }
+
   return {
     formik,
     debouncedValues,
@@ -449,5 +477,6 @@ export function useSignatureBuilder() {
     handleCopy,
     handlePhoneChange,
     handleFaxChange,
+    handleAddressChange
   };
 }

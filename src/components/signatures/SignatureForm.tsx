@@ -9,7 +9,7 @@ import Textarea from "@mui/joy/Textarea";
 import Typography from "@mui/joy/Typography";
 import { LogoUploader } from "@/components/signatures/LogoUploader";
 import { SignatureActions } from "@/components/signatures/SignatureActions";
-import type { useSignatureBuilder } from "@/hooks/useSignatureBuilder";
+import { FIELD_MAX_LENGTH, type useSignatureBuilder } from "@/hooks/useSignatureBuilder";
 
 type BuilderState = ReturnType<typeof useSignatureBuilder>;
 
@@ -44,6 +44,7 @@ export function SignatureForm({ state }: SignatureFormProps) {
     handleCopy,
     handlePhoneChange,
     handleFaxChange,
+    handleAddressChange
   } = state;
 
   const { values, errors, touched, handleChange, handleBlur } = formik;
@@ -65,6 +66,7 @@ export function SignatureForm({ state }: SignatureFormProps) {
             value={values.name}
             onChange={handleChange}
             onBlur={handleBlur}
+            slotProps={{ input: { maxLength: FIELD_MAX_LENGTH.name } }}
           />
           <Typography level="body-sm" sx={{ mt: 0.5 }} color="neutral">
             Use the partner company name — this is how you'll find this signature later.
@@ -82,6 +84,7 @@ export function SignatureForm({ state }: SignatureFormProps) {
             value={values.fullName}
             onChange={handleChange}
             onBlur={handleBlur}
+            slotProps={{ input: { maxLength: FIELD_MAX_LENGTH.fullName } }}
           />
           {touched.fullName && errors.fullName && (
             <Typography level="body-xs" color="danger" sx={{ mt: 0.5 }}>{errors.fullName}</Typography>
@@ -91,11 +94,14 @@ export function SignatureForm({ state }: SignatureFormProps) {
         {/* Title */}
         <FormControl error={Boolean(touched.title && errors.title)}>
           <FormLabel>Job Title *</FormLabel>
-          <Input
+          <Textarea
             name="title"
+            minRows={1}
+            maxRows={2}
             value={values.title}
             onChange={handleChange}
             onBlur={handleBlur}
+            slotProps={{ textarea: { maxLength: FIELD_MAX_LENGTH.title } }}
           />
           {touched.title && errors.title && (
             <Typography level="body-xs" color="danger" sx={{ mt: 0.5 }}>{errors.title}</Typography>
@@ -137,6 +143,7 @@ export function SignatureForm({ state }: SignatureFormProps) {
             value={values.email}
             onChange={handleChange}
             onBlur={handleBlur}
+            slotProps={{ input: { maxLength: FIELD_MAX_LENGTH.email } }}
           />
           {touched.email && errors.email && (
             <Typography level="body-xs" color="danger" sx={{ mt: 0.5 }}>{errors.email}</Typography>
@@ -152,6 +159,7 @@ export function SignatureForm({ state }: SignatureFormProps) {
             value={values.lic}
             onChange={handleChange}
             onBlur={handleBlur}
+            slotProps={{ input: { maxLength: FIELD_MAX_LENGTH.lic } }}
           />
         </FormControl>
 
@@ -161,10 +169,12 @@ export function SignatureForm({ state }: SignatureFormProps) {
           <Textarea
             name="address"
             minRows={2}
+            maxRows={2}
             placeholder={"e.g. 206 Highway 71 N.\nMena, AR 71953"}
             value={values.address}
-            onChange={handleChange}
+            onChange={handleAddressChange}
             onBlur={handleBlur}
+            slotProps={{ textarea: { maxLength: FIELD_MAX_LENGTH.address } }}
           />
           {touched.address && errors.address && (
             <Typography level="body-xs" color="danger" sx={{ mt: 0.5 }}>{errors.address}</Typography>
@@ -180,6 +190,7 @@ export function SignatureForm({ state }: SignatureFormProps) {
             value={values.website}
             onChange={handleChange}
             onBlur={handleBlur}
+            slotProps={{ input: { maxLength: FIELD_MAX_LENGTH.website } }}
           />
         </FormControl>
 

@@ -26,9 +26,9 @@ type PreviewColors = {
 
 function getPreviewColors(isDark: boolean): PreviewColors {
   if (isDark) {
-    return { bg: "#1e1e35", border: "#A4B6D8", nameColor: "#A4B6D8", textColor: "#D1D5DB", linkColor: "#A4B6D8", mutedColor: "#9CA3AF" };
+    return { bg: "#1e1e35", border: "#A4B6D8", nameColor: "#A4B6D8", textColor: "#D1D5DB", linkColor: "#A4B6D8", mutedColor: "#D1D5DB" };
   }
-  return { bg: "#ffffff", border: "#6F8CC0", nameColor: "#6F8CC0", textColor: "#364153", linkColor: "#6F8CC0", mutedColor: "#6B7280" };
+  return { bg: "#ffffff", border: "#6F8CC0", nameColor: "#6F8CC0", textColor: "#364153", linkColor: "#6F8CC0", mutedColor: "#364153" };
 }
 
 // ── Inner signature table ─────────────────────────────────────
@@ -59,6 +59,10 @@ function SignatureTable({ values, logoUrl, logoWidth, logoHeight, isDark, logoLo
     <React.Fragment key={i}>{line}<br /></React.Fragment>
   ));
 
+  const titleLines = values.title.toUpperCase().trim().split("\n").map((line, i) => (
+    <React.Fragment key={i}>{line}<br /></React.Fragment>
+  ));
+
   return (
     <table cellPadding={0} cellSpacing={0} style={{
       borderCollapse: "collapse",
@@ -71,11 +75,11 @@ function SignatureTable({ values, logoUrl, logoWidth, logoHeight, isDark, logoLo
         <tr>
           {/* Left column */}
           <td valign="top" style={{ textAlign: "right", paddingRight: 16, borderRight: `2px solid ${c.border}`, whiteSpace: "nowrap" }}>
-            <p style={{ margin: "0 0 2px", fontSize: 18, color: c.nameColor }}>
+            <p style={{ margin: "0 0 6px", fontSize: 19, color: c.nameColor }}>
               <strong>{values.fullName || "Full Name"}</strong>
             </p>
-            <p style={{ margin: 0, color: c.textColor, fontSize: 11, letterSpacing: "0.05em" }}>
-              {(values.title || "Job Title").toUpperCase()}
+            <p style={{ margin: 0, color: c.textColor, fontSize: 12, lineHeight: "14px" }}>
+              {(titleLines || "Job Title")}
             </p>
             <p style={{ margin: "12px 0 0", color: c.textColor }}>
               {contactLineElements}
@@ -135,12 +139,12 @@ function SignatureTable({ values, logoUrl, logoWidth, logoHeight, isDark, logoLo
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={INSZONE_LOGO_URL} alt="Inszone Insurance" style={{ display: "inline" }} />
             </p>
-            <p style={{ margin: "16px 0 8px" }}>
+            <p style={{ margin: "16px 0 8px", textAlign: "left" }}>
               <a href="https://inszoneinsurance.com/" target="_blank" rel="noreferrer" style={{ color: c.linkColor, textDecoration: "underline" }}>
                 INSZONEINSURANCE.COM
               </a>
             </p>
-            <p style={{ margin: 0, letterSpacing: "1.5pt", color: c.mutedColor }}>LIC #0F82764</p>
+            <p style={{ margin: 0, letterSpacing: "1.5pt", color: c.mutedColor, textAlign: "left" }}>LIC #0F82764</p>
           </td>
         </tr>
       </tbody>
