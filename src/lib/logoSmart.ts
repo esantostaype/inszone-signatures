@@ -7,7 +7,7 @@ export type SmartPlan =
   | { kind: "SOLID_BG"; bgHex: string; bgR: number; bgG: number; bgB: number }
   | { kind: "COMPLEX_BG" }
   | { kind: "SVG" }
-  | { kind: "BADGE" }; // <-- NEW: colored badge/emblem, keep as-is
+  | { kind: "BADGE" };
 
 export type LogoBox = { w: number; h: number };
 
@@ -15,7 +15,7 @@ export type SmartLogoResult = {
   plan: SmartPlan;
   trimmedAr: number;
   box: LogoBox;
-  /** Buffer procesado (fondo blanco + padding) listo para subir a Cloudinary */
+  /** Buffer procesado listo para subir a Cloudinary */
   processedBuffer: Buffer;
   /** Si es SVG o imagen perfecta, saltar el pipeline analyze/enhance */
   skipEnhancement: boolean;
@@ -27,16 +27,16 @@ export function getSmartLogoBox(ar: number): LogoBox {
 
   if (ar < 0.85)       w = 48;
   else if (ar <= 1.18) w = 72;
-  else if (ar <= 1.7) w = 106;
-  else if (ar <= 2.4) w = 118;
-  else if (ar <= 3.4) w = 130;
-  else if (ar <= 4.4) w = 142;
-  else if (ar <= 5.4) w = 154;
-  else if (ar <= 6.4) w = 166;
-  else if (ar <= 7.4) w = 178;
-  else if (ar <= 8.4) w = 190;
-  else if (ar <= 9.4) w = 202;
-  else                w = 214;
+  else if (ar <= 1.7)  w = 106;
+  else if (ar <= 2.4)  w = 118;
+  else if (ar <= 3.4)  w = 130;
+  else if (ar <= 4.4)  w = 142;
+  else if (ar <= 5.4)  w = 154;
+  else if (ar <= 6.4)  w = 166;
+  else if (ar <= 7.4)  w = 178;
+  else if (ar <= 8.4)  w = 190;
+  else if (ar <= 9.4)  w = 202;
+  else                 w = 214;
 
   const h = Math.round(w / ar);
   return { w, h };
@@ -44,8 +44,6 @@ export function getSmartLogoBox(ar: number): LogoBox {
 
 /**
  * Agrega fondo blanco sólido y N píxeles de padding a todos los lados.
- * La imagen resultante tiene dimensions (w + padding*2) x (h + padding*2)
- * con el logo centrado sobre fondo blanco.
  */
 export async function addWhiteBackgroundAndPadding(
   buffer: Buffer,
@@ -114,18 +112,14 @@ async function removeSolidBackground(
  * Detecta si una imagen es un "badge" o insignia — un logo circular, escudo,
  * o emblema donde el fondo de color ES parte del diseño intencional.
  *
- * Funciona tanto para imágenes con alpha COMO sin alpha:
+ * Caso A — CON alpha:
+ *   Estrategia 1: detecta FORMA CIRCULAR por fillRatio (opacos / bbox ≈ π/4).
+ *                 Funciona para badges negros, blancos, o cualquier color.
+ *   Estrategia 2: detecta borde interno con color saturado (lógica original).
  *
- * Caso A — CON alpha (ej: webp/png circular recortado):
- *   Muestrea los píxeles del borde INTERNO de la forma opaca (los primeros/últimos
- *   píxeles opacos en cada fila/columna). Si esos píxeles tienen alta saturación
- *   de color (no son blancos/grises), es un badge con fondo de color intencional.
- *
- * Caso B — SIN alpha (imagen rectangular sólida):
- *   Verifica que los bordes exteriores sean de un color uniforme y saturado
- *   (no blanco), indicando que el fondo rectangular es parte del diseño.
- *
- * Returns true si el logo es un badge y debe mantenerse sin modificación.
+ * Caso B — SIN alpha (rectangular sólida):
+ *   Estrategia 1: si fondo es blanco → detecta circularidad por píxeles de contenido.
+ *   Estrategia 2: si fondo es color saturado → lógica original.
  */
 async function isBadgeLogo(
   fileBuffer: Buffer,
@@ -167,15 +161,12 @@ async function isBadgeLogo(
     if (bbAr < 0.4 || bbAr > 2.5) return false;
 
     // ── ESTRATEGIA 1: FORMA CIRCULAR ──────────────────────────────────────
-    // Para un círculo perfecto: opaqueCount / (bw * bh) ≈ π/4 ≈ 0.785
-    // Aceptamos 0.65–0.98 para cubrir escudos, ovales, círculos con algo interior
-    const bboxArea = bw * bh;
-    const fillRatio = opaqueCount / bboxArea;
-    const isCircular = fillRatio >= 0.65 && fillRatio <= 0.98;
+    // Círculo perfecto: opaqueCount / (bw * bh) ≈ π/4 ≈ 0.785
+    // Rango 0.65–0.98 cubre escudos, ovales, círculos con zonas interiores
+    const fillRatio = opaqueCount / (bw * bh);
+    if (fillRatio >= 0.65 && fillRatio <= 0.98) return true;
 
-    if (isCircular) return true; // ← badge circular, sin importar el color
-
-    // ── ESTRATEGIA 2: BORDE INTERNO SATURADO (lógica original) ───────────
+    // ── ESTRATEGIA 2: BORDE INTERNO SATURADO ─────────────────────────────
     const innerEdgeSamples: Array<{ r: number; g: number; b: number }> = [];
     const insetPx = Math.max(4, Math.floor(Math.min(bw, bh) * 0.04));
     const step = 8;
@@ -225,11 +216,10 @@ async function isBadgeLogo(
       (acc, px) => acc + (px.r + px.g + px.b) / 3, 0
     ) / innerEdgeSamples.length;
 
-    // Badge si borde interno tiene color saturado y no casi blanco
     return avgSaturation > 0.25 && avgBrightness > 20;
 
   } else {
-    // ── Caso B: imagen sin alpha (rectangular sólida) — sin cambios ───────
+    // ── Caso B: imagen sin alpha (rectangular sólida) ─────────────────────
     const corners = [
       getPixel(data, w, 0,     0    ),
       getPixel(data, w, w - 1, 0    ),
@@ -240,10 +230,45 @@ async function isBadgeLogo(
     if (!cornersSimilar(corners, 30)) return false;
 
     const edgeColor = averageRGBA(corners);
-
     const whiteness = Math.min(edgeColor.r, edgeColor.g, edgeColor.b);
-    if (whiteness > 220) return false;
 
+    // ── ESTRATEGIA 1: fondo blanco → detectar por circularidad ───────────
+    // (fix: antes retornaba false aquí, sin detectar badges negros sobre blanco)
+    if (whiteness > 220) {
+      const BG_TOL = 30;
+      let contentCount = 0;
+      let rmin = h, rmax = 0, cmin = w, cmax = 0;
+
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const px = getPixel(data, w, x, y);
+          const diff = Math.sqrt(
+            (px.r - edgeColor.r) ** 2 +
+            (px.g - edgeColor.g) ** 2 +
+            (px.b - edgeColor.b) ** 2
+          );
+          if (diff > BG_TOL) {
+            contentCount++;
+            if (y < rmin) rmin = y;
+            if (y > rmax) rmax = y;
+            if (x < cmin) cmin = x;
+            if (x > cmax) cmax = x;
+          }
+        }
+      }
+
+      if (contentCount === 0) return false;
+
+      const bw = cmax - cmin + 1;
+      const bh = rmax - rmin + 1;
+      const bbAr = bw / bh;
+      if (bbAr < 0.4 || bbAr > 2.5) return false;
+
+      const fillRatio = contentCount / (bw * bh);
+      return fillRatio >= 0.55 && fillRatio <= 0.98;
+    }
+
+    // ── ESTRATEGIA 2: fondo de color saturado → lógica original ──────────
     const mx = Math.max(edgeColor.r, edgeColor.g, edgeColor.b);
     const mn = Math.min(edgeColor.r, edgeColor.g, edgeColor.b);
     const saturation = mx > 0 ? (mx - mn) / mx : 0;
@@ -286,13 +311,13 @@ const PADDING = 20;
 /**
  * Pipeline completo:
  * 1. Detecta tipo (SVG, alpha, badge/emblem, fondo sólido, fondo complejo)
- * 2. Para SVG: rasteriza directamente
- * 3. Para alpha: trim directo + fondo blanco + padding
- * 4. Para badge/emblem: solo redimensiona, sin fondo blanco ni padding
- * 5. Para fondo sólido: remueve fondo + fondo blanco + padding
- * 6. Para complejo: trim + fondo blanco + padding
- * 7. Calcula AR del contenido (sin el padding)
- * 8. Devuelve buffer PNG listo para subir
+ * 2. Para SVG: rasteriza directamente + fondo blanco + padding
+ * 3. Para badge con alpha: trim + resize, sin fondo blanco ni padding
+ * 4. Para badge sin alpha con fondo blanco: quita el blanco + trim + resize
+ * 5. Para badge sin alpha con fondo de color: solo resize, preserva el color
+ * 6. Para logo normal con alpha: trim + fondo blanco + padding
+ * 7. Para logo sin alpha con fondo sólido: remueve fondo + fondo blanco + padding
+ * 8. Para complejo: trim + fondo blanco + padding
  */
 export async function analyzeLogoBuffer(
   fileBuffer: Buffer,
@@ -303,7 +328,7 @@ export async function analyzeLogoBuffer(
     fileBuffer.slice(0, 200).toString("utf8").trimStart().startsWith("<svg") ||
     fileBuffer.slice(0, 200).toString("utf8").trimStart().startsWith("<?xml");
 
-  // ── SVG: rasterizar a 512px y saltar enhance ──────────────────────────────
+  // ── SVG ───────────────────────────────────────────────────────────────────
   if (isSvg) {
     const rasterized = await sharp(fileBuffer, { failOn: "none" })
       .resize(512, 512, { fit: "inside", withoutEnlargement: false })
@@ -336,75 +361,76 @@ export async function analyzeLogoBuffer(
   const meta = await img.metadata();
   const hasAlpha = Boolean(meta.hasAlpha);
 
-  // ── Badge/Emblem detection (before alpha / solid-bg logic) ───────────────
+  // ── Badge/Emblem detection ────────────────────────────────────────────────
   const badge = await isBadgeLogo(fileBuffer, hasAlpha);
   if (badge) {
-  let badgeBuffer: Buffer;
+    let badgeBuffer: Buffer;
 
-  if (hasAlpha) {
-    // Ya tiene transparencia → solo trim + resize
-    badgeBuffer = await sharp(fileBuffer, { failOn: "none" })
-      .trim({ threshold: 10 })
-      .resize(512, 512, { fit: "inside", withoutEnlargement: false })
-      .png()
-      .toBuffer();
-
-  } else {
-    // Sin alpha → revisar si el fondo es blanco/near-white
-    const { data: rawData, info: rawInfo } = await sharp(fileBuffer, { failOn: "none" })
-      .ensureAlpha()
-      .raw()
-      .toBuffer({ resolveWithObject: true });
-
-    const rw = rawInfo.width;
-    const rh = rawInfo.height;
-
-    const corners = [
-      getPixel(rawData, rw, 0,      0     ),
-      getPixel(rawData, rw, rw - 1, 0     ),
-      getPixel(rawData, rw, 0,      rh - 1),
-      getPixel(rawData, rw, rw - 1, rh - 1),
-    ];
-
-    const avg = averageRGBA(corners);
-    const isWhiteBg =
-      cornersSimilar(corners, 30) &&
-      avg.r > 220 && avg.g > 220 && avg.b > 220; // near-white
-
-    if (isWhiteBg) {
-      // Quitar fondo blanco → badge con transparencia, sin padding
-      const withoutBg = await removeSolidBackground(fileBuffer, avg.r, avg.g, avg.b, 30);
-      badgeBuffer = await sharp(withoutBg, { failOn: "none" })
+    if (hasAlpha) {
+      // Con alpha → trim + resize, sin fondo ni padding
+      badgeBuffer = await sharp(fileBuffer, { failOn: "none" })
         .trim({ threshold: 10 })
         .resize(512, 512, { fit: "inside", withoutEnlargement: false })
         .png()
         .toBuffer();
+
     } else {
-      // Fondo de color (no blanco) → mantener tal cual, solo resize
-      badgeBuffer = await sharp(fileBuffer, { failOn: "none" })
-        .resize(512, 512, { fit: "inside", withoutEnlargement: false })
-        .png()
-        .toBuffer();
+      // Sin alpha → revisar si el fondo es blanco/near-white
+      const { data: rawData, info: rawInfo } = await sharp(fileBuffer, { failOn: "none" })
+        .ensureAlpha()
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+
+      const rw = rawInfo.width;
+      const rh = rawInfo.height;
+
+      const corners = [
+        getPixel(rawData, rw, 0,      0     ),
+        getPixel(rawData, rw, rw - 1, 0     ),
+        getPixel(rawData, rw, 0,      rh - 1),
+        getPixel(rawData, rw, rw - 1, rh - 1),
+      ];
+
+      const avg = averageRGBA(corners);
+      const isWhiteBg =
+        cornersSimilar(corners, 30) &&
+        avg.r > 220 && avg.g > 220 && avg.b > 220;
+
+      if (isWhiteBg) {
+        // Fondo blanco → quitarlo, sin padding
+        // Tolerancia 40 para absorber artefactos de compresión JPG
+        const withoutBg = await removeSolidBackground(fileBuffer, avg.r, avg.g, avg.b, 40);
+        badgeBuffer = await sharp(withoutBg, { failOn: "none" })
+          .trim({ threshold: 10 })
+          .resize(512, 512, { fit: "inside", withoutEnlargement: false })
+          .png()
+          .toBuffer();
+      } else {
+        // Fondo de color → el color es parte del diseño, solo resize
+        badgeBuffer = await sharp(fileBuffer, { failOn: "none" })
+          .resize(512, 512, { fit: "inside", withoutEnlargement: false })
+          .png()
+          .toBuffer();
+      }
     }
+
+    const resizedMeta = await sharp(badgeBuffer).metadata();
+    const tw = resizedMeta.width  ?? meta.width  ?? 1;
+    const th = resizedMeta.height ?? meta.height ?? 1;
+    const ar = tw / th;
+
+    return {
+      plan: { kind: "BADGE" },
+      trimmedAr: ar,
+      box: getSmartLogoBox(ar),
+      processedBuffer: badgeBuffer,
+      skipEnhancement: true,
+    };
   }
-
-  const resizedMeta = await sharp(badgeBuffer).metadata();
-  const tw = resizedMeta.width  ?? meta.width  ?? 1;
-  const th = resizedMeta.height ?? meta.height ?? 1;
-  const ar = tw / th;
-
-  return {
-    plan: { kind: "BADGE" },
-    trimmedAr: ar,
-    box: getSmartLogoBox(ar),
-    processedBuffer: badgeBuffer,
-    skipEnhancement: true,
-  };
-}
 
   // ── Normal logo paths ─────────────────────────────────────────────────────
   let plan: SmartPlan;
-  let logoBuffer: Buffer; // logo sin fondo, trimmed
+  let logoBuffer: Buffer;
 
   if (hasAlpha) {
     plan = { kind: "HAS_ALPHA" };
@@ -454,13 +480,11 @@ export async function analyzeLogoBuffer(
     }
   }
 
-  // Calcular AR del logo real (sin padding)
   const logoMeta = await sharp(logoBuffer).metadata();
   const tw = logoMeta.width  ?? meta.width  ?? 1;
   const th = logoMeta.height ?? meta.height ?? 1;
   const trimmedAr = tw / th;
 
-  // Agregar fondo blanco + 20px padding
   const processedBuffer = await addWhiteBackgroundAndPadding(logoBuffer, PADDING);
 
   return {
@@ -474,7 +498,6 @@ export async function analyzeLogoBuffer(
 
 /**
  * URL de Cloudinary simple — el procesamiento ya se hizo localmente.
- * Solo aplica resize final manteniendo AR.
  */
 export function buildSmartDisplayUrl(args: {
   cloudName: string;
