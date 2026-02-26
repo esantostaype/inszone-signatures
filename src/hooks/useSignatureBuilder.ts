@@ -143,20 +143,7 @@ function buildCloudinaryResizedUrl(url: string, w: number, h: number): string {
 // Sube el buffer procesado a Cloudinary. Se llama UNA vez, justo antes de
 // guardar o copiar. Cachea el resultado en el UploadResult para no re-subir.
 
-async function commitToCloudinary(logo: UploadResult): Promise<{
-  public_id: string;
-  secure_url: string;
-  display_url: string;
-}> {
-  // Ya se hizo commit antes — reutilizar
-  if (logo.secure_url && logo.public_id && logo.display_url) {
-    return {
-      public_id:   logo.public_id,
-      secure_url:  logo.secure_url,
-      display_url: logo.display_url,
-    };
-  }
-
+async function commitToCloudinary(logo: UploadResult): Promise<UploadResult> {
   if (!logo.processed_base64) {
     throw new Error("No processed image data available to upload");
   }
@@ -176,7 +163,9 @@ async function commitToCloudinary(logo: UploadResult): Promise<{
     throw new Error((err as { error?: string }).error || "Failed to upload logo");
   }
 
-  return res.json();
+  const data = await res.json() as { public_id: string; secure_url: string; display_url: string; bytes: number };
+  // Fusionar con el objeto original preservando processed_base64, blob_url, etc.
+  return { ...logo, ...data };
 }
 
 // ── Letterhead download helper ────────────────────────────────────────────────
@@ -358,20 +347,31 @@ export function useSignatureBuilder() {
   // Sube el logo a Cloudinary y actualiza el estado con las URLs reales.
   // Si ya se hizo commit, no vuelve a subir.
 
-  async function ensureCloudinaryUrl(logo: UploadResult): Promise<string> {
-    if (logo.secure_url) return logo.secure_url;
+  // ensureCommitted: retorna el UploadResult con URLs de Cloudinary.
+  // Si ya tiene secure_url + display_url, lo retorna tal cual (no re-sube).
+  async function ensureCommitted(logo: UploadResult): Promise<UploadResult> {
+    if (logo.secure_url && logo.public_id && logo.display_url) return logo;
 
     const committed = await commitToCloudinary(logo);
 
-    // Actualizar el estado con las URLs de Cloudinary para no re-subir
-    const updated: UploadResult = { ...logo, ...committed };
+    // Persistir en estado para que la próxima llamada no vuelva a subir
     if (enhanced && logo === enhanced) {
-      setEnhanced(updated);
+      setEnhanced(committed);
     } else if (uploadedLogo && logo === uploadedLogo) {
-      setUploadedLogo(updated);
+      setUploadedLogo(committed);
     }
 
-    return committed.secure_url;
+    return committed;
+  }
+
+  // resolveLogoUrl: URL final que va al clipboard/DB — siempre Cloudinary, nunca blob.
+  // Usa display_url (con c_fit transform del tamaño correcto) salvo que el usuario
+  // haya ajustado el size manualmente con el modal Resize.
+  function resolveLogoUrl(committed: UploadResult, w: number, h: number, currentResizedUrl: string | null): string {
+    if (currentResizedUrl) {
+      return buildCloudinaryResizedUrl(committed.secure_url!, w, h);
+    }
+    return committed.display_url || committed.secure_url!;
   }
 
   // ── Enhance ───────────────────────────────────────────────────────────────
@@ -441,14 +441,12 @@ export function useSignatureBuilder() {
     try {
       // ── Commit a Cloudinary si aún no se hizo ──────────────────────────────
       setUploadMsg("Uploading logo…");
-      const cloudinarySecureUrl = await ensureCloudinaryUrl(activeLogo!);
-
-      // La URL que se guarda en DB es la de Cloudinary (permanente y pública)
-      const finalLogoUrl = resizedLogoUrl
-        ? buildCloudinaryResizedUrl(cloudinarySecureUrl, logoDisplayWidth, logoDisplayHeight)
-        : (activeLogo!.display_url || cloudinarySecureUrl);
-
+      const committed = await ensureCommitted(activeLogo!);
       setUploadMsg("");
+
+      // URL final: display_url tiene el c_fit transform correcto. Si el usuario
+      // hizo resize manual usamos buildCloudinaryResizedUrl sobre secure_url.
+      const finalLogoUrl = resolveLogoUrl(committed, logoDisplayWidth, logoDisplayHeight, resizedLogoUrl);
 
       const payload = {
         name:              formik.values.name,
@@ -488,7 +486,7 @@ export function useSignatureBuilder() {
             fax:               formik.values.fax || "",
             address:           formik.values.address,
             website:           formik.values.website || "",
-            partnerLogoUrl:    cloudinarySecureUrl,
+            partnerLogoUrl:    committed.secure_url!,
             partnerLogoWidth:  logoDisplayWidth,
             partnerLogoHeight: logoDisplayHeight,
           });
@@ -526,16 +524,14 @@ export function useSignatureBuilder() {
     if (Object.keys(errorsWithoutName).length > 0 || !hasUploadedLogo) return;
 
     try {
-      // ── Commit a Cloudinary si aún no se hizo ──────────────────────────────
-      // La firma se pega en Outlook — la imagen debe ser una URL pública real.
+      // Commit a Cloudinary — la firma se pega en Outlook y necesita URL pública.
+      // Si ya se hizo commit (ej: después de Save), retorna el objeto cacheado sin re-subir.
       setUploadMsg("Uploading logo…");
-      const cloudinarySecureUrl = await ensureCloudinaryUrl(activeLogo!);
-
-      const finalLogoUrl = resizedLogoUrl
-        ? buildCloudinaryResizedUrl(cloudinarySecureUrl, logoDisplayWidth, logoDisplayHeight)
-        : (activeLogo!.display_url || cloudinarySecureUrl);
-
+      const committed = await ensureCommitted(activeLogo!);
       setUploadMsg("");
+
+      // URL final con transform de Cloudinary — nunca blob URL en el clipboard
+      const finalLogoUrl = resolveLogoUrl(committed, logoDisplayWidth, logoDisplayHeight, resizedLogoUrl);
 
       const contactLines = [
         `Phone: ${debouncedValues.phone}`,
