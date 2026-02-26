@@ -109,6 +109,75 @@ async function removeSolidBackground(
 }
 
 /**
+ * Elimina fondo usando flood-fill desde los bordes de la imagen.
+ * Solo hace transparentes los píxeles de fondo CONECTADOS al exterior.
+ * Preserva píxeles del mismo color que estén en el interior del logo
+ * (ej: blanco dentro de un badge circular).
+ */
+async function removeBackgroundFloodFill(
+  buffer: Buffer,
+  bgR: number,
+  bgG: number,
+  bgB: number,
+  tolerance = 40
+): Promise<Buffer> {
+  const { data, info } = await sharp(buffer, { failOn: "none" })
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+
+  const w = info.width;
+  const h = info.height;
+  const pixels = new Uint8ClampedArray(data);
+
+  const isBg = (idx: number): boolean => {
+    const r = pixels[idx];
+    const g = pixels[idx + 1];
+    const b = pixels[idx + 2];
+    return Math.sqrt((r - bgR) ** 2 + (g - bgG) ** 2 + (b - bgB) ** 2) <= tolerance;
+  };
+
+  // BFS flood-fill desde todos los píxeles del borde que sean fondo
+  const visited = new Uint8Array(w * h);
+  const queue: number[] = [];
+
+  const enqueue = (y: number, x: number): void => {
+    const pos = y * w + x;
+    if (!visited[pos] && isBg(pos * 4)) {
+      visited[pos] = 1;
+      queue.push(pos);
+    }
+  };
+
+  // Seeds: todos los píxeles del borde exterior de la imagen
+  for (let x = 0; x < w; x++) { enqueue(0, x); enqueue(h - 1, x); }
+  for (let y = 1; y < h - 1; y++) { enqueue(y, 0); enqueue(y, w - 1); }
+
+  // BFS
+  let qi = 0;
+  while (qi < queue.length) {
+    const pos = queue[qi++];
+    const y = Math.floor(pos / w);
+    const x = pos % w;
+    if (y > 0)     enqueue(y - 1, x);
+    if (y < h - 1) enqueue(y + 1, x);
+    if (x > 0)     enqueue(y, x - 1);
+    if (x < w - 1) enqueue(y, x + 1);
+  }
+
+  // Solo los píxeles alcanzados desde el exterior → transparentes
+  for (let i = 0; i < w * h; i++) {
+    if (visited[i]) pixels[i * 4 + 3] = 0;
+  }
+
+  return sharp(Buffer.from(pixels.buffer), {
+    raw: { width: w, height: h, channels: 4 },
+  })
+    .png()
+    .toBuffer();
+}
+
+/**
  * Detecta si una imagen es un "badge" o insignia — un logo circular, escudo,
  * o emblema donde el fondo de color ES parte del diseño intencional.
  *
@@ -235,10 +304,8 @@ async function isBadgeLogo(
     // ── ESTRATEGIA 1: fondo blanco → detectar por circularidad ───────────
     // (fix: antes retornaba false aquí, sin detectar badges negros sobre blanco)
     if (whiteness > 220) {
-      // Detectar badge circular con fondo blanco.
-      // Estrategia: las ESQUINAS del bounding box de contenido están vacías en un círculo.
-      // Un logo rectangular llena sus esquinas; un badge circular las deja vacías.
       const BG_TOL = 30;
+      let contentCount = 0;
       let rmin = h, rmax = 0, cmin = w, cmax = 0;
 
       for (let y = 0; y < h; y++) {
@@ -250,6 +317,7 @@ async function isBadgeLogo(
             (px.b - edgeColor.b) ** 2
           );
           if (diff > BG_TOL) {
+            contentCount++;
             if (y < rmin) rmin = y;
             if (y > rmax) rmax = y;
             if (x < cmin) cmin = x;
@@ -258,48 +326,15 @@ async function isBadgeLogo(
         }
       }
 
-      if (rmin >= rmax || cmin >= cmax) return false;
+      if (contentCount === 0) return false;
 
       const bw = cmax - cmin + 1;
       const bh = rmax - rmin + 1;
       const bbAr = bw / bh;
       if (bbAr < 0.4 || bbAr > 2.5) return false;
 
-      // Verificar que las esquinas del bbox están vacías (badge circular)
-      const cornerSz = Math.max(4, Math.floor(Math.min(bw, bh) * 0.10));
-      let cornerContent = 0;
-      for (let y = rmin; y < rmin + cornerSz; y++) {
-        for (let x = cmin; x < cmin + cornerSz; x++) {
-          const px = getPixel(data, w, x, y);
-          const diff = Math.sqrt((px.r - edgeColor.r) ** 2 + (px.g - edgeColor.g) ** 2 + (px.b - edgeColor.b) ** 2);
-          if (diff > BG_TOL) cornerContent++;
-        }
-      }
-      for (let y = rmin; y < rmin + cornerSz; y++) {
-        for (let x = cmax - cornerSz; x < cmax; x++) {
-          const px = getPixel(data, w, x, y);
-          const diff = Math.sqrt((px.r - edgeColor.r) ** 2 + (px.g - edgeColor.g) ** 2 + (px.b - edgeColor.b) ** 2);
-          if (diff > BG_TOL) cornerContent++;
-        }
-      }
-      for (let y = rmax - cornerSz; y < rmax; y++) {
-        for (let x = cmin; x < cmin + cornerSz; x++) {
-          const px = getPixel(data, w, x, y);
-          const diff = Math.sqrt((px.r - edgeColor.r) ** 2 + (px.g - edgeColor.g) ** 2 + (px.b - edgeColor.b) ** 2);
-          if (diff > BG_TOL) cornerContent++;
-        }
-      }
-      for (let y = rmax - cornerSz; y < rmax; y++) {
-        for (let x = cmax - cornerSz; x < cmax; x++) {
-          const px = getPixel(data, w, x, y);
-          const diff = Math.sqrt((px.r - edgeColor.r) ** 2 + (px.g - edgeColor.g) ** 2 + (px.b - edgeColor.b) ** 2);
-          if (diff > BG_TOL) cornerContent++;
-        }
-      }
-      const cornerFill = cornerContent / (4 * cornerSz * cornerSz);
-      // Badge circular: esquinas vacías (cornerFill < 0.15)
-      // Logo rectangular: esquinas llenas (cornerFill >= 0.15)
-      return cornerFill < 0.15;
+      const fillRatio = contentCount / (bw * bh);
+      return fillRatio >= 0.55 && fillRatio <= 0.98;
     }
 
     // ── ESTRATEGIA 2: fondo de color saturado → lógica original ──────────
@@ -433,7 +468,8 @@ export async function analyzeLogoBuffer(
       if (isWhiteBg) {
         // Fondo blanco → quitarlo, sin padding
         // Tolerancia 40 para absorber artefactos de compresión JPG
-        const withoutBg = await removeSolidBackground(fileBuffer, avg.r, avg.g, avg.b, 40);
+        // Usar flood-fill para preservar blancos interiores del badge (ej: anillo)
+        const withoutBg = await removeBackgroundFloodFill(fileBuffer, avg.r, avg.g, avg.b, 40);
         badgeBuffer = await sharp(withoutBg, { failOn: "none" })
           .trim({ threshold: 10 })
           .resize(512, 512, { fit: "inside", withoutEnlargement: false })
