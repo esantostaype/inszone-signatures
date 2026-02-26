@@ -112,7 +112,7 @@ async function removeSolidBackground(
  * Elimina fondo usando flood-fill desde los bordes de la imagen.
  * Solo hace transparentes los píxeles de fondo CONECTADOS al exterior.
  * Preserva píxeles del mismo color que estén en el interior del logo
- * (ej: blanco dentro de un badge circular).
+ * (ej: blanco dentro de un badge circular tipo anillo).
  */
 async function removeBackgroundFloodFill(
   buffer: Buffer,
@@ -137,7 +137,6 @@ async function removeBackgroundFloodFill(
     return Math.sqrt((r - bgR) ** 2 + (g - bgG) ** 2 + (b - bgB) ** 2) <= tolerance;
   };
 
-  // BFS flood-fill desde todos los píxeles del borde que sean fondo
   const visited = new Uint8Array(w * h);
   const queue: number[] = [];
 
@@ -149,11 +148,9 @@ async function removeBackgroundFloodFill(
     }
   };
 
-  // Seeds: todos los píxeles del borde exterior de la imagen
   for (let x = 0; x < w; x++) { enqueue(0, x); enqueue(h - 1, x); }
   for (let y = 1; y < h - 1; y++) { enqueue(y, 0); enqueue(y, w - 1); }
 
-  // BFS
   let qi = 0;
   while (qi < queue.length) {
     const pos = queue[qi++];
@@ -165,7 +162,6 @@ async function removeBackgroundFloodFill(
     if (x < w - 1) enqueue(y, x + 1);
   }
 
-  // Solo los píxeles alcanzados desde el exterior → transparentes
   for (let i = 0; i < w * h; i++) {
     if (visited[i]) pixels[i * 4 + 3] = 0;
   }
@@ -175,6 +171,68 @@ async function removeBackgroundFloodFill(
   })
     .png()
     .toBuffer();
+}
+
+/**
+ * Detecta si el contenido de una imagen con fondo uniforme forma un shape circular.
+ * Método: las esquinas del bounding box de contenido deben estar VACÍAS.
+ * Un círculo/badge no llega a las esquinas de su bbox; un rectángulo sí.
+ */
+function checkCircularByEmptyCorners(
+  data: Buffer,
+  w: number,
+  h: number,
+  bgR: number,
+  bgG: number,
+  bgB: number,
+  bgTol = 30
+): boolean {
+  let rmin = h, rmax = 0, cmin = w, cmax = 0;
+
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const px = getPixel(data, w, x, y);
+      const diff = Math.sqrt(
+        (px.r - bgR) ** 2 + (px.g - bgG) ** 2 + (px.b - bgB) ** 2
+      );
+      if (diff > bgTol) {
+        if (y < rmin) rmin = y;
+        if (y > rmax) rmax = y;
+        if (x < cmin) cmin = x;
+        if (x > cmax) cmax = x;
+      }
+    }
+  }
+
+  if (rmin >= rmax || cmin >= cmax) return false;
+
+  const bw = cmax - cmin + 1;
+  const bh = rmax - rmin + 1;
+  if (bw / bh < 0.4 || bw / bh > 2.5) return false;
+
+  // Muestrear las 4 esquinas del bounding box
+  const csz = Math.max(4, Math.floor(Math.min(bw, bh) * 0.10));
+  let cornerContent = 0;
+  const zones = [
+    [rmin, rmin + csz, cmin, cmin + csz],         // top-left
+    [rmin, rmin + csz, cmax - csz, cmax],          // top-right
+    [rmax - csz, rmax, cmin, cmin + csz],          // bottom-left
+    [rmax - csz, rmax, cmax - csz, cmax],          // bottom-right
+  ];
+  for (const [y0, y1, x0, x1] of zones) {
+    for (let y = y0; y < y1; y++) {
+      for (let x = x0; x < x1; x++) {
+        const px = getPixel(data, w, x, y);
+        const diff = Math.sqrt(
+          (px.r - bgR) ** 2 + (px.g - bgG) ** 2 + (px.b - bgB) ** 2
+        );
+        if (diff > bgTol) cornerContent++;
+      }
+    }
+  }
+  const cornerFill = cornerContent / (4 * csz * csz);
+  // Badge circular → esquinas vacías (cornerFill < 0.15)
+  return cornerFill < 0.15;
 }
 
 /**
@@ -203,7 +261,52 @@ async function isBadgeLogo(
   const h = info.height;
 
   if (hasAlpha) {
-    // ── Caso A: imagen con transparencia ──────────────────────────────────
+    // ── Caso A': PNG con alpha pero SIN transparencia real ───────────────────
+    // Ej: PNG con fondo blanco donde alpha=255 en todos los píxeles.
+    // Si lo tratamos como Caso A, opaqueCount = w*h → fillRatio ~1.0 → falso negativo.
+    // Fix: contar transparentes; si son 0, redirigir a lógica de Caso B.
+    let transparentCount = 0;
+    for (let i = 3; i < data.length; i += 4) {
+      if (data[i] < 128) { transparentCount++; }
+    }
+    if (transparentCount === 0) {
+      // Sin transparencia real → tratar como imagen sólida rectangular
+      const cornersAp = [
+        getPixel(data, w, 0,     0    ),
+        getPixel(data, w, w - 1, 0    ),
+        getPixel(data, w, 0,     h - 1),
+        getPixel(data, w, w - 1, h - 1),
+      ];
+      if (!cornersSimilar(cornersAp, 30)) return false;
+      const edgeAp = averageRGBA(cornersAp);
+      const whitenessAp = Math.min(edgeAp.r, edgeAp.g, edgeAp.b);
+      if (whitenessAp > 220) {
+        // Fondo blanco → detectar badge circular por esquinas vacías
+        return checkCircularByEmptyCorners(data, w, h, edgeAp.r, edgeAp.g, edgeAp.b);
+      }
+      const mxAp = Math.max(edgeAp.r, edgeAp.g, edgeAp.b);
+      const mnAp = Math.min(edgeAp.r, edgeAp.g, edgeAp.b);
+      if (mxAp === 0 || (mxAp - mnAp) / mxAp < 0.2) return false;
+      const edgeSamplesAp: Array<{ r: number; g: number; b: number; a: number }> = [];
+      for (let x = 0; x < w; x += 4) {
+        edgeSamplesAp.push(getPixel(data, w, x, 0));
+        edgeSamplesAp.push(getPixel(data, w, x, h - 1));
+      }
+      for (let y = 0; y < h; y += 4) {
+        edgeSamplesAp.push(getPixel(data, w, 0,     y));
+        edgeSamplesAp.push(getPixel(data, w, w - 1, y));
+      }
+      const matchAp = edgeSamplesAp.filter(px => Math.sqrt(
+        (px.r - edgeAp.r) ** 2 + (px.g - edgeAp.g) ** 2 + (px.b - edgeAp.b) ** 2
+      ) <= 50).length;
+      if (matchAp / edgeSamplesAp.length < 0.55) return false;
+      const centerAp = getPixel(data, w, Math.floor(w / 2), Math.floor(h / 2));
+      return Math.sqrt(
+        (centerAp.r - edgeAp.r) ** 2 + (centerAp.g - edgeAp.g) ** 2 + (centerAp.b - edgeAp.b) ** 2
+      ) >= 30;
+    }
+
+    // ── Caso A: imagen con transparencia real ─────────────────────────────
     let rmin = h, rmax = 0, cmin = w, cmax = 0;
     let opaqueCount = 0;
 
@@ -304,37 +407,7 @@ async function isBadgeLogo(
     // ── ESTRATEGIA 1: fondo blanco → detectar por circularidad ───────────
     // (fix: antes retornaba false aquí, sin detectar badges negros sobre blanco)
     if (whiteness > 220) {
-      const BG_TOL = 30;
-      let contentCount = 0;
-      let rmin = h, rmax = 0, cmin = w, cmax = 0;
-
-      for (let y = 0; y < h; y++) {
-        for (let x = 0; x < w; x++) {
-          const px = getPixel(data, w, x, y);
-          const diff = Math.sqrt(
-            (px.r - edgeColor.r) ** 2 +
-            (px.g - edgeColor.g) ** 2 +
-            (px.b - edgeColor.b) ** 2
-          );
-          if (diff > BG_TOL) {
-            contentCount++;
-            if (y < rmin) rmin = y;
-            if (y > rmax) rmax = y;
-            if (x < cmin) cmin = x;
-            if (x > cmax) cmax = x;
-          }
-        }
-      }
-
-      if (contentCount === 0) return false;
-
-      const bw = cmax - cmin + 1;
-      const bh = rmax - rmin + 1;
-      const bbAr = bw / bh;
-      if (bbAr < 0.4 || bbAr > 2.5) return false;
-
-      const fillRatio = contentCount / (bw * bh);
-      return fillRatio >= 0.55 && fillRatio <= 0.98;
+      return checkCircularByEmptyCorners(data, w, h, edgeColor.r, edgeColor.g, edgeColor.b);
     }
 
     // ── ESTRATEGIA 2: fondo de color saturado → lógica original ──────────
@@ -435,8 +508,18 @@ export async function analyzeLogoBuffer(
   if (badge) {
     let badgeBuffer: Buffer;
 
+    // Detectar si tiene transparencia real (vs PNG opaco con alpha=255)
+    let hasRealTransparency = false;
     if (hasAlpha) {
-      // Con alpha → trim + resize, sin fondo ni padding
+      const { data: alphaData } = await sharp(fileBuffer, { failOn: "none" })
+        .ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+      for (let i = 3; i < alphaData.length; i += 4) {
+        if (alphaData[i] < 128) { hasRealTransparency = true; break; }
+      }
+    }
+
+    if (hasRealTransparency) {
+      // Alpha real → trim + resize, el fondo ya es transparente
       badgeBuffer = await sharp(fileBuffer, { failOn: "none" })
         .trim({ threshold: 10 })
         .resize(512, 512, { fit: "inside", withoutEnlargement: false })
@@ -444,7 +527,7 @@ export async function analyzeLogoBuffer(
         .toBuffer();
 
     } else {
-      // Sin alpha → revisar si el fondo es blanco/near-white
+      // Sin alpha real (JPG, PNG sólido, o PNG con alpha falso)
       const { data: rawData, info: rawInfo } = await sharp(fileBuffer, { failOn: "none" })
         .ensureAlpha()
         .raw()
@@ -466,9 +549,7 @@ export async function analyzeLogoBuffer(
         avg.r > 220 && avg.g > 220 && avg.b > 220;
 
       if (isWhiteBg) {
-        // Fondo blanco → quitarlo, sin padding
-        // Tolerancia 40 para absorber artefactos de compresión JPG
-        // Usar flood-fill para preservar blancos interiores del badge (ej: anillo)
+        // Fondo blanco → flood-fill desde bordes para preservar blancos interiores
         const withoutBg = await removeBackgroundFloodFill(fileBuffer, avg.r, avg.g, avg.b, 40);
         badgeBuffer = await sharp(withoutBg, { failOn: "none" })
           .trim({ threshold: 10 })
@@ -476,7 +557,7 @@ export async function analyzeLogoBuffer(
           .png()
           .toBuffer();
       } else {
-        // Fondo de color → el color es parte del diseño, solo resize
+        // Fondo de color → parte del diseño, solo resize
         badgeBuffer = await sharp(fileBuffer, { failOn: "none" })
           .resize(512, 512, { fit: "inside", withoutEnlargement: false })
           .png()
