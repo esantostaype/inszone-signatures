@@ -140,10 +140,10 @@ async function isBadgeLogo(
   const h = info.height;
 
   if (hasAlpha) {
-    // ── Caso A: imagen con transparencia ────────────────────────────────────
-    // Encontrar el bounding box del contenido opaco
+    // ── Caso A: imagen con transparencia ──────────────────────────────────
     let rmin = h, rmax = 0, cmin = w, cmax = 0;
     let opaqueCount = 0;
+
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
         const a = data[(y * w + x) * 4 + 3];
@@ -159,22 +159,28 @@ async function isBadgeLogo(
 
     if (opaqueCount === 0) return false;
 
-    const bw = cmax - cmin;
-    const bh = rmax - rmin;
+    const bw = cmax - cmin + 1;
+    const bh = rmax - rmin + 1;
 
-    // Debe ser razonablemente compacto/cuadrado (badges suelen ser ~cuadrados o ligeramente rectangulares)
+    // Debe ser razonablemente compacto/cuadrado
     const bbAr = bw / bh;
-    if (bbAr < 0.4 || bbAr > 2.5) return false; // muy alargado → no es badge
+    if (bbAr < 0.4 || bbAr > 2.5) return false;
 
-    // Muestrear píxeles del borde interno de la forma opaca
-    // (los primeros píxeles opacos desde cada borde del bounding box)
+    // ── ESTRATEGIA 1: FORMA CIRCULAR ──────────────────────────────────────
+    // Para un círculo perfecto: opaqueCount / (bw * bh) ≈ π/4 ≈ 0.785
+    // Aceptamos 0.65–0.98 para cubrir escudos, ovales, círculos con algo interior
+    const bboxArea = bw * bh;
+    const fillRatio = opaqueCount / bboxArea;
+    const isCircular = fillRatio >= 0.65 && fillRatio <= 0.98;
+
+    if (isCircular) return true; // ← badge circular, sin importar el color
+
+    // ── ESTRATEGIA 2: BORDE INTERNO SATURADO (lógica original) ───────────
     const innerEdgeSamples: Array<{ r: number; g: number; b: number }> = [];
-    const insetPx = Math.max(4, Math.floor(Math.min(bw, bh) * 0.04)); // ~4% hacia adentro
+    const insetPx = Math.max(4, Math.floor(Math.min(bw, bh) * 0.04));
     const step = 8;
 
-    // Borde superior e inferior de la forma
     for (let x = cmin; x <= cmax; x += step) {
-      // Primeros opacos desde arriba y desde abajo
       for (let y = rmin; y <= rmin + insetPx * 4; y++) {
         const idx = (y * w + x) * 4;
         if (data[idx + 3] > 128) {
@@ -190,7 +196,6 @@ async function isBadgeLogo(
         }
       }
     }
-    // Borde izquierdo y derecho de la forma
     for (let y = rmin; y <= rmax; y += step) {
       for (let x = cmin; x <= cmin + insetPx * 4; x++) {
         const idx = (y * w + x) * 4;
@@ -210,26 +215,21 @@ async function isBadgeLogo(
 
     if (innerEdgeSamples.length < 10) return false;
 
-    // Calcular saturación promedio de los píxeles del borde interno
-    // Saturación = (max - min) / max  (simplificación HSV)
     const avgSaturation = innerEdgeSamples.reduce((acc, px) => {
       const mx = Math.max(px.r, px.g, px.b);
       const mn = Math.min(px.r, px.g, px.b);
       return acc + (mx > 0 ? (mx - mn) / mx : 0);
     }, 0) / innerEdgeSamples.length;
 
-    // Verificar que no sea un blanco/gris (whiteness alta = no badge)
     const avgBrightness = innerEdgeSamples.reduce(
       (acc, px) => acc + (px.r + px.g + px.b) / 3, 0
     ) / innerEdgeSamples.length;
 
-    // Badge si: borde interno tiene color saturado (dorado, azul, rojo, etc.)
-    // y no es casi blanco o casi negro sin saturación
-    const isSaturatedColor = avgSaturation > 0.25 && avgBrightness > 20;
-    return isSaturatedColor;
+    // Badge si borde interno tiene color saturado y no casi blanco
+    return avgSaturation > 0.25 && avgBrightness > 20;
 
   } else {
-    // ── Caso B: imagen sin alpha (rectangular sólida) ────────────────────────
+    // ── Caso B: imagen sin alpha (rectangular sólida) — sin cambios ───────
     const corners = [
       getPixel(data, w, 0,     0    ),
       getPixel(data, w, w - 1, 0    ),
@@ -241,17 +241,14 @@ async function isBadgeLogo(
 
     const edgeColor = averageRGBA(corners);
 
-    // Skip near-white backgrounds
     const whiteness = Math.min(edgeColor.r, edgeColor.g, edgeColor.b);
     if (whiteness > 220) return false;
 
-    // El color de borde debe ser saturado
     const mx = Math.max(edgeColor.r, edgeColor.g, edgeColor.b);
     const mn = Math.min(edgeColor.r, edgeColor.g, edgeColor.b);
     const saturation = mx > 0 ? (mx - mn) / mx : 0;
-    if (saturation < 0.2) return false; // gris → no es badge
+    if (saturation < 0.2) return false;
 
-    // Muestrear borde exterior
     const edgeSamples: Array<{ r: number; g: number; b: number; a: number }> = [];
     const step = 4;
     for (let x = 0; x < w; x += step) {
@@ -274,7 +271,6 @@ async function isBadgeLogo(
 
     if (matchCount / edgeSamples.length < 0.55) return false;
 
-    // Centro debe ser diferente del borde
     const centerPx = getPixel(data, w, Math.floor(w / 2), Math.floor(h / 2));
     const centerDiff = Math.sqrt(
       (centerPx.r - edgeColor.r) ** 2 +
