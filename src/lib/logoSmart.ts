@@ -339,34 +339,68 @@ export async function analyzeLogoBuffer(
   // ── Badge/Emblem detection (before alpha / solid-bg logic) ───────────────
   const badge = await isBadgeLogo(fileBuffer, hasAlpha);
   if (badge) {
-    // Badge: solo trim (si tiene alpha) + resize. Sin fondo blanco ni padding.
-    let badgeBuffer: Buffer;
-    if (hasAlpha) {
-      badgeBuffer = await sharp(fileBuffer, { failOn: "none" })
+  let badgeBuffer: Buffer;
+
+  if (hasAlpha) {
+    // Ya tiene transparencia → solo trim + resize
+    badgeBuffer = await sharp(fileBuffer, { failOn: "none" })
+      .trim({ threshold: 10 })
+      .resize(512, 512, { fit: "inside", withoutEnlargement: false })
+      .png()
+      .toBuffer();
+
+  } else {
+    // Sin alpha → revisar si el fondo es blanco/near-white
+    const { data: rawData, info: rawInfo } = await sharp(fileBuffer, { failOn: "none" })
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+
+    const rw = rawInfo.width;
+    const rh = rawInfo.height;
+
+    const corners = [
+      getPixel(rawData, rw, 0,      0     ),
+      getPixel(rawData, rw, rw - 1, 0     ),
+      getPixel(rawData, rw, 0,      rh - 1),
+      getPixel(rawData, rw, rw - 1, rh - 1),
+    ];
+
+    const avg = averageRGBA(corners);
+    const isWhiteBg =
+      cornersSimilar(corners, 30) &&
+      avg.r > 220 && avg.g > 220 && avg.b > 220; // near-white
+
+    if (isWhiteBg) {
+      // Quitar fondo blanco → badge con transparencia, sin padding
+      const withoutBg = await removeSolidBackground(fileBuffer, avg.r, avg.g, avg.b, 30);
+      badgeBuffer = await sharp(withoutBg, { failOn: "none" })
         .trim({ threshold: 10 })
         .resize(512, 512, { fit: "inside", withoutEnlargement: false })
         .png()
         .toBuffer();
     } else {
+      // Fondo de color (no blanco) → mantener tal cual, solo resize
       badgeBuffer = await sharp(fileBuffer, { failOn: "none" })
         .resize(512, 512, { fit: "inside", withoutEnlargement: false })
         .png()
         .toBuffer();
     }
-
-    const resizedMeta = await sharp(badgeBuffer).metadata();
-    const tw = resizedMeta.width  ?? meta.width  ?? 1;
-    const th = resizedMeta.height ?? meta.height ?? 1;
-    const ar = tw / th;
-
-    return {
-      plan: { kind: "BADGE" },
-      trimmedAr: ar,
-      box: getSmartLogoBox(ar),
-      processedBuffer: badgeBuffer,
-      skipEnhancement: true,
-    };
   }
+
+  const resizedMeta = await sharp(badgeBuffer).metadata();
+  const tw = resizedMeta.width  ?? meta.width  ?? 1;
+  const th = resizedMeta.height ?? meta.height ?? 1;
+  const ar = tw / th;
+
+  return {
+    plan: { kind: "BADGE" },
+    trimmedAr: ar,
+    box: getSmartLogoBox(ar),
+    processedBuffer: badgeBuffer,
+    skipEnhancement: true,
+  };
+}
 
   // ── Normal logo paths ─────────────────────────────────────────────────────
   let plan: SmartPlan;
