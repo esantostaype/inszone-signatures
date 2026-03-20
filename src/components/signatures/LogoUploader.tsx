@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 // src/components/signatures/LogoUploader.tsx
 import * as React from "react";
