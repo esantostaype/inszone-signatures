@@ -148,7 +148,7 @@ export function LogoUploader({
         <div className="flex items-center gap-2">
 
           {/* Enhance with AI */}
-          {!skipEnhancement && (
+          {/* {!skipEnhancement && (
             <Button
               variant="outlined"
               color="neutral"
@@ -163,7 +163,7 @@ export function LogoUploader({
             >
               {busyEnhance ? "Enhancing…" : "Enhance with AI"}
             </Button>
-          )}
+          )} */}
 
           {/* Resize */}
           <Button
