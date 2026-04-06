@@ -8,6 +8,8 @@ export const signatures = sqliteTable("signatures", {
   title:             text("title").notNull(),
   phone:             text("phone").notNull(),
   fax:               text("fax"),
+  direct:            text("direct"),
+  sms:               text("sms"), 
   email:             text("email").notNull(),
   address:           text("address").notNull(),
   website:           text("website"),

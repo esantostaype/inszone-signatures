@@ -28,6 +28,8 @@ export const FIELD_MAX_LENGTH = {
   title:     32,
   phone:     14,
   fax:       14,
+  direct:    14,
+  sms:       14,
   email:    32,
   address:  64,
   website:  32,
@@ -59,6 +61,8 @@ export type SignatureFormValues = {
   title:        string;
   phone:        string;
   fax:          string;
+  direct:       string;
+  sms:          string;
   email:        string;
   address:      string;
   website:      string;
@@ -73,6 +77,8 @@ const schema = Yup.object({
   title:    Yup.string().trim().min(2).max(FIELD_MAX_LENGTH.title, `Max ${FIELD_MAX_LENGTH.title} characters`).required("Job title is required"),
   phone:    Yup.string().trim().min(2).max(FIELD_MAX_LENGTH.phone).required("Phone is required"),
   fax:      Yup.string().trim().max(FIELD_MAX_LENGTH.fax).optional(),
+  direct:   Yup.string().trim().max(FIELD_MAX_LENGTH.direct).optional(),
+  sms:      Yup.string().trim().max(FIELD_MAX_LENGTH.sms).optional(),
   email:    Yup.string().trim().email("Invalid email").max(FIELD_MAX_LENGTH.email, `Max ${FIELD_MAX_LENGTH.email} characters`).required("Email is required"),
   address:  Yup.string().trim().min(2)
     .max(FIELD_MAX_LENGTH.address, `Max ${FIELD_MAX_LENGTH.address} characters`)
@@ -124,9 +130,9 @@ function stripHtml(html: string) {
 export function formatPhone(raw: string): string {
   const digits = raw.replace(/\D/g, "").slice(0, 10);
   if (digits.length === 0) return "";
-  if (digits.length <= 3) return `(${digits}`;
-  if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
-  return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+  return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
 }
 
 // ── Cloudinary URL builder (solo para URLs ya en Cloudinary) ──────────────────
@@ -255,6 +261,8 @@ export function useSignatureBuilder() {
       title:        "Marketing Coordinator",
       phone:        "",
       fax:          "",
+      direct:       "",
+      sms:          "",
       email:        "rbancifra@inszoneins.com",
       address:      "",
       website:      "",
@@ -276,6 +284,16 @@ export function useSignatureBuilder() {
   function handleFaxChange(e: React.ChangeEvent<HTMLInputElement>) {
     const formatted = formatPhone(e.target.value);
     formik.setFieldValue("fax", formatted);
+  }
+
+  function handleDirectChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const formatted = formatPhone(e.target.value);
+    formik.setFieldValue("direct", formatted);
+  }
+
+  function handleSmsChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const formatted = formatPhone(e.target.value);
+    formik.setFieldValue("sms", formatted);
   }
 
   // ── Upload ────────────────────────────────────────────────────────────────
@@ -454,6 +472,8 @@ export function useSignatureBuilder() {
         title:             formik.values.title,
         phone:             formik.values.phone,
         fax:               formik.values.fax || null,
+        direct:            formik.values.direct || null,
+        sms:               formik.values.sms    || null,
         email:             formik.values.email,
         address:           formik.values.address,
         lic:               formik.values.lic || null,
@@ -535,7 +555,9 @@ export function useSignatureBuilder() {
 
       const contactLines = [
         `Phone: ${debouncedValues.phone}`,
-        debouncedValues.fax ? `Fax: ${debouncedValues.fax}` : null,
+        debouncedValues.fax    ? `Fax: ${debouncedValues.fax}`       : null,
+        debouncedValues.direct ? `Direct: ${debouncedValues.direct}` : null,  // ← nuevo
+        debouncedValues.sms    ? `SMS: ${debouncedValues.sms}`       : null,  // ← nuevo
       ].filter(Boolean).join("\n");
 
       const html = buildOutlookSignatureHtml({
@@ -598,6 +620,8 @@ export function useSignatureBuilder() {
     handleCopy,
     handlePhoneChange,
     handleFaxChange,
+    handleDirectChange,
+    handleSmsChange,
     handleAddressChange,
   };
 }

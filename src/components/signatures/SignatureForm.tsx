@@ -44,6 +44,8 @@ export function SignatureForm({ state }: SignatureFormProps) {
     handleCopy,
     handlePhoneChange,
     handleFaxChange,
+    handleDirectChange,
+    handleSmsChange,
     handleAddressChange
   } = state;
 
@@ -112,7 +114,7 @@ export function SignatureForm({ state }: SignatureFormProps) {
           <FormLabel>Phone *</FormLabel>
           <Input
             name="phone"
-            placeholder="e.g. (479) 394-2244"
+            placeholder="e.g. 479-394-2244"
             value={values.phone}
             onChange={handlePhoneChange}
             onBlur={handleBlur}
@@ -127,9 +129,33 @@ export function SignatureForm({ state }: SignatureFormProps) {
           <FormLabel>Fax (optional)</FormLabel>
           <Input
             name="fax"
-            placeholder="e.g. (479) 394-2249"
+            placeholder="e.g. 479-394-2249"
             value={values.fax}
             onChange={handleFaxChange}
+            onBlur={handleBlur}
+          />
+        </FormControl>
+
+        {/* Direct */}
+        <FormControl>
+          <FormLabel>Direct (optional)</FormLabel>
+          <Input
+            name="direct"
+            placeholder="e.g. 479-394-2250"
+            value={values.direct}
+            onChange={handleDirectChange}
+            onBlur={handleBlur}
+          />
+        </FormControl>
+
+        {/* SMS */}
+        <FormControl>
+          <FormLabel>SMS (optional)</FormLabel>
+          <Input
+            name="sms"
+            placeholder="e.g. 479-394-2251"
+            value={values.sms}
+            onChange={handleSmsChange}
             onBlur={handleBlur}
           />
         </FormControl>

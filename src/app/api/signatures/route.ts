@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
 
     const {
       name, fullName, title,
-      phone, fax,                // ← antes: contactLines
+      phone, fax, direct, sms,              // ← antes: contactLines
       email, address, lic, website,
       partnerLogoUrl, partnerLogoWidth, partnerLogoHeight,
     } = body;
@@ -45,6 +45,8 @@ export async function POST(request: NextRequest) {
       title:             title.trim(),
       phone:             phone.trim(),       // ← antes: contactLines
       fax:               fax?.trim() || null, // ← nuevo (opcional)
+      direct:            direct?.trim() || null,   // ← nuevo
+      sms:               sms?.trim()    || null,   // ← nuevo
       email:             email.trim(),
       address:           address.trim(),
       lic:               lic?.trim() || null,

@@ -47,13 +47,14 @@ function SignatureTable({ values, logoUrl, logoWidth, logoHeight, isDark, logoLo
 
   // Cada línea como elemento separado con <br> — igual que addressLines
   const contactLineElements = [
-    values.phone ? `Phone: ${values.phone}` : null,
-    values.fax   ? `Fax: ${values.fax}`     : null,
-  ]
-    .filter(Boolean)
-    .map((line, i) => (
-      <React.Fragment key={i}>{line}<br /></React.Fragment>
-    ));
+    values.phone  ? `Phone: ${values.phone}`    : null,
+    values.fax    ? `Fax: ${values.fax}`        : null,
+    values.direct ? `Direct: ${values.direct}`  : null,   // ← nuevo
+    values.sms    ? `SMS: ${values.sms}`        : null,   // ← nuevo
+  ].filter(Boolean)
+  .map((line, i) => (
+    <React.Fragment key={i}>{line}<br /></React.Fragment>
+  ));
 
   const addressLines = values.address.trim().split("\n").map((line, i) => (
     <React.Fragment key={i}>{line}<br /></React.Fragment>

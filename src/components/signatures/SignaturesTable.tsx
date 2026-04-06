@@ -25,6 +25,8 @@ export interface SavedSignature {
   title:             string;
   phone:             string | null;
   fax:               string | null;
+  direct:               string | null;
+  sms:               string | null;
   contactLines:      string;
   email:             string;
   address:           string;
@@ -64,6 +66,8 @@ async function triggerLetterheadDownload(row: SavedSignature): Promise<void> {
       partnerName:       row.name,
       phone:             row.phone             || "",
       fax:               row.fax               || "",
+      direct:            row.direct               || "",
+      sms:               row.sms               || "",
       address:           row.address,
       website:           row.website           || "",  // ← fix: usar el campo guardado
       partnerLogoUrl:    row.partnerLogoUrl    || "",
@@ -92,6 +96,8 @@ function SignaturePreviewContent({ row }: { row: SavedSignature }) {
   const contactLines = row.contactLines ?? "";
   const phone = row.phone?.trim() || contactLines.match(/Phone:\s*(.+)/)?.[1]?.trim() || "";
   const fax   = row.fax?.trim()   || contactLines.match(/Fax:\s*(.+)/)?.[1]?.trim()   || "";
+  const direct   = row.direct?.trim()   || contactLines.match(/Direct:\s*(.+)/)?.[1]?.trim()   || "";
+  const sms   = row.sms?.trim()   || contactLines.match(/SMS:\s*(.+)/)?.[1]?.trim()   || "";
 
   return (
     <SignaturePreview
@@ -101,6 +107,8 @@ function SignaturePreviewContent({ row }: { row: SavedSignature }) {
         title:    row.title,
         phone,
         fax,
+        direct,
+        sms,
         email:   row.email,
         address: row.address,
         website: row.website ?? "",
@@ -154,6 +162,8 @@ function RowActions({ row, onDelete }: RowActionsProps) {
     const contactLines = [
       row.phone ? `Phone: ${row.phone}` : null,
       row.fax   ? `Fax: ${row.fax}`     : null,
+      row.direct   ? `Direct: ${row.direct}`     : null,
+      row.sms   ? `SMS: ${row.sms}`     : null,
     ].filter(Boolean).join("\n");
 
     const html = buildOutlookSignatureHtml({
