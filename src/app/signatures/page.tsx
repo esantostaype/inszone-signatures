@@ -16,7 +16,7 @@ export default function SignaturesPage() {
 
   return (
     <div className="flex-1 py-10 px-6">
-      <div className="mx-auto max-w-6xl">
+      <div className="mx-auto">
         <div className="flex flex-col md:flex-row gap-2 md:items-center justify-between mb-6">
           <MainTitle title="Saved Signatures" icon={SignatureIcon} />
           <Button component={Link} href="/" color="primary" size="sm">

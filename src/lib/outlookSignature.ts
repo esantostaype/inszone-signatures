@@ -1,14 +1,14 @@
 // src/lib/outlookSignature.ts
-export type SignatureType = "powered-by" | "formerly";
+export type SignatureType = "basic" | "powered-by" | "formerly";
 
 export type SignatureInput = {
   fullName: string;
   title: string;
-  contactLines: string;
+  contactLines: string;   // pre-built, ordered: Phone / Office / SMS / Fax
   email: string;
   address: string;
   lic?: string;
-  /** Processed Cloudinary URL (white bg + padding + resize) */
+  /** Processed Cloudinary URL (white bg + padding + resize) — not used for "basic" */
   partnerLogoUrl?: string;
   /** Visual width from upload response (box.w) */
   partnerLogoWidth?: number;
@@ -22,6 +22,8 @@ export type SignatureInput = {
 
 const INSZONE_LOGO_URL =
   "https://inszoneinsurance.com/wp-content/uploads/2026/01/logo-inszone.png";
+
+const DEFAULT_BASIC_ADDRESS = "4025 E. La Palma Ave, Suite 101\nAnaheim, CA 92807";
 const FACEBOOK_URL =
   "https://inszoneinsurance.com/wp-content/uploads/2026/02/facebook.png";
 const TWITTER_URL =
@@ -48,47 +50,66 @@ function buildRightColumn(
   partnerLogoUrl: string,
   logoW: number,
   logoH: number,
-  type: SignatureType
+  type: SignatureType,
+  basicAddress: string
 ): string {
+  const inszoneImg = `<img src="${INSZONE_LOGO_URL}" alt="Inszone Insurance" style="display:inline">`;
+
+  if (type === "basic") {
+    const addressHtml = nl2br(basicAddress.trim());
+    return `
+      <p style="margin:0;text-align:left;">
+        ${inszoneImg}
+      </p>
+      <p style="margin:12px 0 0;text-align:left;color:#364153;font-size:12px;line-height:16px;">${addressHtml}</p>`;
+  }
+
   const partnerImg = partnerLogoUrl
     ? `<img src="${partnerLogoUrl}" alt="Partner" width="${logoW}" height="${logoH}" style="display:block;margin:0 auto 6px;width:${logoW}px;height:${logoH}px;object-fit:contain;">`
     : "";
 
-  const inszoneImg = `<img src="${INSZONE_LOGO_URL}" alt="Inszone Insurance" style="display:inline">`;
-
   if (type === "formerly") {
     return `
       <p style="margin:0;text-align:center;">
-        ${inszoneImg}</p>
-        <p style="display:block;margin:8px 0;color:#6F8CC0;font-weight:bold; text-align:center;">formerly operating as</p>
-        <p style="margin:0;text-align:center;">${partnerImg}
+        ${inszoneImg}
+      </p>
+      <p style="display:block;margin:8px 0;color:#6F8CC0;font-weight:bold;text-align:center;">formerly operating as</p>
+      <p style="margin:0;text-align:center;">
+        ${partnerImg}
       </p>`;
   }
 
   // default: "powered-by"
   return `
     <p style="margin:0;text-align:center;">
-      ${partnerImg}</p>
-      <p style="display:block;margin:0 0 8px;color:#6F8CC0;font-weight:bold; text-align:center;">powered by</p>
-      <p style="margin:0;text-align:center;">${inszoneImg}
+      ${partnerImg}
+    </p>
+    <p style="display:block;margin:0 0 8px;color:#6F8CC0;font-weight:bold;text-align:center;">powered by</p>
+    <p style="margin:0;text-align:center;">
+      ${inszoneImg}
     </p>`;
 }
 
 // ── Main builder ──────────────────────────────────────────────
 
 export function buildOutlookSignatureHtml(input: SignatureInput): string {
-  const fullName = esc(input.fullName.trim());
-  const title = nl2br(input.title.trim()).toUpperCase();
-  const contactLines = nl2br((input.contactLines ?? "").trim());
-  const email = esc(input.email.trim());
-  const address = nl2br((input.address ?? "").trim());
-  const lic = input.lic ? esc(input.lic.trim()) : "";
-  const partnerLogoUrl = input.partnerLogoUrl ?? "";
-  const logoW = input.partnerLogoWidth ?? 96;
-  const logoH = input.partnerLogoHeight ?? 96;
   const signatureType = input.signatureType ?? "powered-by";
 
-  const rightColumn = buildRightColumn(partnerLogoUrl, logoW, logoH, signatureType);
+  // Name color: basic uses text color, others use accent
+  const nameColor = signatureType === "basic" ? "#364153" : "#6F8CC0";
+
+  const fullName     = esc(input.fullName.trim());
+  const title        = nl2br(input.title.trim()).toUpperCase();
+  const contactLines = nl2br((input.contactLines ?? "").trim());
+  const email        = esc(input.email.trim());
+  const rawAddress   = (input.address ?? "").trim() || (signatureType === "basic" ? DEFAULT_BASIC_ADDRESS : "");
+  const address      = nl2br(rawAddress);
+  const lic          = input.lic ? esc(input.lic.trim()) : "";
+  const partnerLogoUrl = input.partnerLogoUrl ?? "";
+  const logoW        = input.partnerLogoWidth  ?? 96;
+  const logoH        = input.partnerLogoHeight ?? 96;
+
+  const rightColumn  = buildRightColumn(partnerLogoUrl, logoW, logoH, signatureType, rawAddress);
 
   return `
 <!-- START SIGNATURE -->
@@ -97,38 +118,38 @@ export function buildOutlookSignatureHtml(input: SignatureInput): string {
   <tr>
     <!-- LEFT COLUMN -->
     <td valign="top" style="text-align:right;padding-right:16px;border-right:2px solid #6F8CC0;">
-      <p style="margin:0 0 4px;font-size:19px;color:#6F8CC0;"><b>${fullName}</b></p>
-      <p style="margin:0;color:#364153; line-height:12px;">${title}</p>
+      <p style="margin:0 0 4px;font-size:19px;color:${nameColor};"><b>${fullName}</b></p>
+      <p style="margin:0;color:#364153;line-height:12px;">${title}</p>
       <p style="margin:12px 0 0;color:#364153;">
         ${contactLines}<br>
         <a href="mailto:${email}" style="color:#6F8CC0;text-decoration:underline">${email}</a>
       </p>
-      <p style="margin:12px 0 0;color:#364153;">${address}</p>
+      ${signatureType !== "basic" ? `<p style="margin:12px 0 0;color:#364153;">${address}</p>` : ""}
       ${lic ? `<p style="margin:12px 0 0;letter-spacing:1.5pt;">${lic}</p>` : ""}
-        <table cellpadding="0" cellspacing="0" border="0" style="margin-top:12px; display:inline-table;border-collapse:collapse;">
-          <tr>
-            <td style="padding:0;">
-              <a href="https://www.facebook.com/InszoneInsuranceServices/"
-                target="_blank" style="text-decoration:none;">
-                <img src="${FACEBOOK_URL}" alt="Facebook" style="display:block;border:0;">
-              </a>
-            </td>
-            <td style="width:4px;"></td>
-            <td style="padding:0;">
-              <a href="https://twitter.com/InszoneIns"
-                target="_blank" style="text-decoration:none;">
-                <img src="${TWITTER_URL}" alt="Twitter" style="display:block;border:0;">
-              </a>
-            </td>
-            <td style="width:4px;"></td>
-            <td style="padding:0;">
-              <a href="https://www.linkedin.com/company/inszone-insurance-services-inc-"
-                target="_blank" style="text-decoration:none;">
-                <img src="${LINKEDIN_URL}" alt="Linkedin" style="display:block;border:0;">
-              </a>
-            </td>
-          </tr>
-        </table>
+      <table cellpadding="0" cellspacing="0" border="0" style="margin-top:12px;display:inline-table;border-collapse:collapse;">
+        <tr>
+          <td style="padding:0;">
+            <a href="https://www.facebook.com/InszoneInsuranceServices/"
+              target="_blank" style="text-decoration:none;">
+              <img src="${FACEBOOK_URL}" alt="Facebook" style="display:block;border:0;">
+            </a>
+          </td>
+          <td style="width:4px;"></td>
+          <td style="padding:0;">
+            <a href="https://twitter.com/InszoneIns"
+              target="_blank" style="text-decoration:none;">
+              <img src="${TWITTER_URL}" alt="Twitter" style="display:block;border:0;">
+            </a>
+          </td>
+          <td style="width:4px;"></td>
+          <td style="padding:0;">
+            <a href="https://www.linkedin.com/company/inszone-insurance-services-inc-"
+              target="_blank" style="text-decoration:none;">
+              <img src="${LINKEDIN_URL}" alt="Linkedin" style="display:block;border:0;">
+            </a>
+          </td>
+        </tr>
+      </table>
     </td>
 
     <!-- RIGHT COLUMN -->

@@ -13,6 +13,8 @@ export const DEFAULT_LOGO_URL    = "https://inszoneinsurance.com/wp-content/uplo
 export const DEFAULT_LOGO_WIDTH  = 152;
 export const DEFAULT_LOGO_HEIGHT = 44;
 
+export type SignatureType = "basic" | "powered-by" | "formerly";
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type SmartPlan =
@@ -37,11 +39,9 @@ export const FIELD_MAX_LENGTH = {
 } as const;
 
 export type UploadResult = {
-  // Campos de Cloudinary — null hasta que se haga commit
   public_id:        string | null;
   secure_url:       string | null;
   display_url:      string | null;
-  // Siempre presentes desde el procesamiento local
   width:            number;
   height:           number;
   bytes:            number;
@@ -49,47 +49,53 @@ export type UploadResult = {
   trimmed_ar?:      number;
   skipEnhancement?: boolean;
   plan?:            SmartPlan;
-  // Base64 del buffer procesado — para hacer commit a Cloudinary más tarde
   processed_base64?: string;
-  // URL de preview local (blob URL creado en el cliente)
   blob_url?:        string;
 };
 
 export type SignatureFormValues = {
-  name:         string;
-  fullName:     string;
-  title:        string;
-  phone:        string;
-  fax:          string;
-  direct:       string;
-  sms:          string;
-  email:        string;
-  address:      string;
-  website:      string;
-  lic:          string;
+  name:     string;
+  fullName: string;
+  title:    string;
+  // Contact order: Phone, Office (direct), SMS, Fax
+  phone:    string;
+  direct:   string;  // labelled "Office" in UI
+  sms:      string;
+  fax:      string;
+  email:    string;
+  address:  string;
+  website:  string;
+  lic:      string;
 };
 
 // ── Validation ────────────────────────────────────────────────────────────────
 
-const schema = Yup.object({
-  name:     Yup.string().trim().min(2).max(FIELD_MAX_LENGTH.name, `Max ${FIELD_MAX_LENGTH.name} characters`).required("Signature name is required"),
-  fullName: Yup.string().trim().min(2).max(FIELD_MAX_LENGTH.fullName, `Max ${FIELD_MAX_LENGTH.fullName} characters`).required("Full name is required"),
-  title:    Yup.string().trim().min(2).max(FIELD_MAX_LENGTH.title, `Max ${FIELD_MAX_LENGTH.title} characters`).required("Job title is required"),
-  phone:    Yup.string().trim().min(2).max(FIELD_MAX_LENGTH.phone).required("Phone is required"),
-  fax:      Yup.string().trim().max(FIELD_MAX_LENGTH.fax).optional(),
-  direct:   Yup.string().trim().max(FIELD_MAX_LENGTH.direct).optional(),
-  sms:      Yup.string().trim().max(FIELD_MAX_LENGTH.sms).optional(),
-  email:    Yup.string().trim().email("Invalid email").max(FIELD_MAX_LENGTH.email, `Max ${FIELD_MAX_LENGTH.email} characters`).required("Email is required"),
-  address:  Yup.string().trim().min(2)
-    .max(FIELD_MAX_LENGTH.address, `Max ${FIELD_MAX_LENGTH.address} characters`)
-    .test("max-lines", "Address can have at most 2 lines", (val) => {
-      if (!val) return true;
-      return (val.match(/\n/g) || []).length < 2;
-    })
-    .required("Address is required"),
-  website:  Yup.string().trim().max(FIELD_MAX_LENGTH.website, `Max ${FIELD_MAX_LENGTH.website} characters`).optional(),
-  lic:      Yup.string().trim().max(FIELD_MAX_LENGTH.lic, `Max ${FIELD_MAX_LENGTH.lic} characters`).optional(),
-});
+const DEFAULT_BASIC_ADDRESS = "4025 E. La Palma Ave, Suite 101\nAnaheim, CA 92807";
+
+function buildSchema(signatureType: SignatureType) {
+  const isBasic = signatureType === "basic";
+  return Yup.object({
+    name:     Yup.string().trim().min(2).max(FIELD_MAX_LENGTH.name, `Max ${FIELD_MAX_LENGTH.name} characters`).required("Signature name is required"),
+    fullName: Yup.string().trim().min(2).max(FIELD_MAX_LENGTH.fullName, `Max ${FIELD_MAX_LENGTH.fullName} characters`).required("Full name is required"),
+    title:    Yup.string().trim().min(2).max(FIELD_MAX_LENGTH.title, `Max ${FIELD_MAX_LENGTH.title} characters`).required("Job title is required"),
+    phone:    Yup.string().trim().min(2).max(FIELD_MAX_LENGTH.phone).required("Phone is required"),
+    direct:   Yup.string().trim().max(FIELD_MAX_LENGTH.direct).optional(),
+    sms:      Yup.string().trim().max(FIELD_MAX_LENGTH.sms).optional(),
+    fax:      Yup.string().trim().max(FIELD_MAX_LENGTH.fax).optional(),
+    email:    Yup.string().trim().email("Invalid email").max(FIELD_MAX_LENGTH.email, `Max ${FIELD_MAX_LENGTH.email} characters`).required("Email is required"),
+    address:  isBasic
+      ? Yup.string().trim().max(FIELD_MAX_LENGTH.address, `Max ${FIELD_MAX_LENGTH.address} characters`).optional()
+      : Yup.string().trim().min(2)
+          .max(FIELD_MAX_LENGTH.address, `Max ${FIELD_MAX_LENGTH.address} characters`)
+          .test("max-lines", "Address can have at most 2 lines", (val) => {
+            if (!val) return true;
+            return (val.match(/\n/g) || []).length < 2;
+          })
+          .required("Address is required"),
+    website:  Yup.string().trim().max(FIELD_MAX_LENGTH.website, `Max ${FIELD_MAX_LENGTH.website} characters`).optional(),
+    lic:      Yup.string().trim().max(FIELD_MAX_LENGTH.lic, `Max ${FIELD_MAX_LENGTH.lic} characters`).optional(),
+  });
+}
 
 // ── Debounce hook ─────────────────────────────────────────────────────────────
 
@@ -135,7 +141,7 @@ export function formatPhone(raw: string): string {
   return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
 }
 
-// ── Cloudinary URL builder (solo para URLs ya en Cloudinary) ──────────────────
+// ── Cloudinary helpers ────────────────────────────────────────────────────────
 
 function buildCloudinaryResizedUrl(url: string, w: number, h: number): string {
   if (!url || !url.includes("res.cloudinary.com")) return url;
@@ -144,10 +150,6 @@ function buildCloudinaryResizedUrl(url: string, w: number, h: number): string {
     (_match, version) => `/upload/w_${w},h_${h},c_fit,q_auto,f_auto/${version}`
   );
 }
-
-// ── Cloudinary commit ─────────────────────────────────────────────────────────
-// Sube el buffer procesado a Cloudinary. Se llama UNA vez, justo antes de
-// guardar o copiar. Cachea el resultado en el UploadResult para no re-subir.
 
 async function commitToCloudinary(logo: UploadResult): Promise<UploadResult> {
   if (!logo.processed_base64) {
@@ -170,7 +172,6 @@ async function commitToCloudinary(logo: UploadResult): Promise<UploadResult> {
   }
 
   const data = await res.json() as { public_id: string; secure_url: string; display_url: string; bytes: number };
-  // Fusionar con el objeto original preservando processed_base64, blob_url, etc.
   return { ...logo, ...data };
 }
 
@@ -212,25 +213,41 @@ async function triggerLetterheadDownload(payload: {
   URL.revokeObjectURL(url);
 }
 
+// ── Build contact lines (ordered: Phone, Office, SMS, Fax) ───────────────────
+
+export function buildContactLines(values: {
+  phone: string;
+  direct?: string | null;
+  sms?: string | null;
+  fax?: string | null;
+}): string {
+  return [
+    values.phone  ? `Phone: ${values.phone}`    : null,
+    values.direct ? `Office: ${values.direct}`  : null,
+    values.sms    ? `SMS: ${values.sms}`        : null,
+    values.fax    ? `Fax: ${values.fax}`        : null,
+  ].filter(Boolean).join("\n");
+}
+
 // ── Main hook ─────────────────────────────────────────────────────────────────
 
 export function useSignatureBuilder() {
   const invalidateSignatures = useInvalidateSignatures();
 
-  const [uploadedLogo,      setUploadedLogo]      = React.useState<UploadResult | null>(null);
-  const [enhanced,          setEnhanced]           = React.useState<UploadResult | null>(null);
-  const [rawFile,           setRawFile]            = React.useState<File | null>(null);
-  const [busyUpload,        setBusyUpload]         = React.useState(false);
-  const [busyEnhance,       setBusyEnhance]        = React.useState(false);
-  const [busySave,          setBusySave]           = React.useState(false);
-  const [uploadMsg,         setUploadMsg]          = React.useState("");
-  const [uploadErr,         setUploadErr]          = React.useState("");
-  const [logoError,         setLogoError]          = React.useState("");
-  const [logoDisplayWidth,  setLogoDisplayWidth]   = React.useState(DEFAULT_LOGO_WIDTH);
-  const [logoDisplayHeight, setLogoDisplayHeight]  = React.useState(DEFAULT_LOGO_HEIGHT);
-  const [resizedLogoUrl,    setResizedLogoUrl]     = React.useState<string | null>(null);
+  const [signatureType,     setSignatureType]      = React.useState<SignatureType>("powered-by");
+  const [uploadedLogo,      setUploadedLogo]        = React.useState<UploadResult | null>(null);
+  const [enhanced,          setEnhanced]             = React.useState<UploadResult | null>(null);
+  const [rawFile,           setRawFile]              = React.useState<File | null>(null);
+  const [busyUpload,        setBusyUpload]           = React.useState(false);
+  const [busyEnhance,       setBusyEnhance]          = React.useState(false);
+  const [busySave,          setBusySave]             = React.useState(false);
+  const [uploadMsg,         setUploadMsg]            = React.useState("");
+  const [uploadErr,         setUploadErr]            = React.useState("");
+  const [logoError,         setLogoError]            = React.useState("");
+  const [logoDisplayWidth,  setLogoDisplayWidth]     = React.useState(DEFAULT_LOGO_WIDTH);
+  const [logoDisplayHeight, setLogoDisplayHeight]    = React.useState(DEFAULT_LOGO_HEIGHT);
+  const [resizedLogoUrl,    setResizedLogoUrl]       = React.useState<string | null>(null);
 
-  // Revocar blob URL anterior al desmontar o al reemplazar el logo
   const blobUrlRef = React.useRef<string | null>(null);
   React.useEffect(() => {
     return () => {
@@ -238,62 +255,79 @@ export function useSignatureBuilder() {
     };
   }, []);
 
+  // Reset logo when switching to/from basic type; pre-fill address for basic
+  React.useEffect(() => {
+    if (signatureType === "basic") {
+      setUploadedLogo(null);
+      setEnhanced(null);
+      setRawFile(null);
+      setResizedLogoUrl(null);
+      setLogoError("");
+      setUploadMsg("");
+      setUploadErr("");
+      if (blobUrlRef.current) {
+        URL.revokeObjectURL(blobUrlRef.current);
+        blobUrlRef.current = null;
+      }
+      // Pre-fill address with default HQ address for basic type
+      if (!formik.values.address.trim()) {
+        formik.setFieldValue("address", DEFAULT_BASIC_ADDRESS);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signatureType]);
+
   const activeLogo = enhanced ?? uploadedLogo;
 
-  // Para el preview usamos blob_url (local) → aún no hay Cloudinary URL
-  const logoUrl   = resizedLogoUrl || activeLogo?.blob_url || activeLogo?.display_url || DEFAULT_LOGO_URL;
-  // secure_url es la de Cloudinary; blob_url como fallback para el modal de resize
-  const logoSecureUrl = activeLogo?.secure_url || activeLogo?.blob_url || "";
-
-  const logoWidth  = logoDisplayWidth;
-  const logoHeight = logoDisplayHeight;
+  const logoUrl        = resizedLogoUrl || activeLogo?.blob_url || activeLogo?.display_url || DEFAULT_LOGO_URL;
+  const logoSecureUrl  = activeLogo?.secure_url || activeLogo?.blob_url || "";
+  const logoWidth      = logoDisplayWidth;
+  const logoHeight     = logoDisplayHeight;
   const originalLogoWidth  = activeLogo?.width  || DEFAULT_LOGO_WIDTH;
   const originalLogoHeight = activeLogo?.height || DEFAULT_LOGO_HEIGHT;
-  const hasUploadedLogo = !!activeLogo;
-  const isBadge         = uploadedLogo?.plan?.kind === "BADGE";
-  const canEnhance      = !!uploadedLogo && !!rawFile && !uploadedLogo.skipEnhancement && !busyEnhance && !busyUpload;
-  const logoLoading     = busyUpload || busyEnhance;
+  const hasUploadedLogo    = !!activeLogo;
+  const isBadge            = uploadedLogo?.plan?.kind === "BADGE";
+  const canEnhance         = !!uploadedLogo && !!rawFile && !uploadedLogo.skipEnhancement && !busyEnhance && !busyUpload;
+  const logoLoading        = busyUpload || busyEnhance;
+
+  // Logo is required only for powered-by and formerly types
+  const logoRequired = signatureType !== "basic";
+
+  const validationSchema = React.useMemo(() => buildSchema(signatureType), [signatureType]);
 
   const formik = useFormik<SignatureFormValues>({
     initialValues: {
-      name:         "",
-      fullName:     "Reinalyn Bancifra",
-      title:        "Marketing Coordinator",
-      phone:        "",
-      fax:          "",
-      direct:       "",
-      sms:          "",
-      email:        "rbancifra@inszoneins.com",
-      address:      "",
-      website:      "",
-      lic:          "",
+      name:     "",
+      fullName: "Reinalyn Bancifra",
+      title:    "Marketing Coordinator",
+      phone:    "",
+      direct:   "",
+      sms:      "",
+      fax:      "",
+      email:    "rbancifra@inszoneins.com",
+      address:  "",
+      website:  "",
+      lic:      "",
     },
-    validationSchema: schema,
+    validationSchema,
     onSubmit: () => {},
   });
 
   const [debouncedValues, isPending] = useDebounce(formik.values, 800);
 
-  // ── Phone/Fax formatting handlers ────────────────────────────────────────
+  // ── Phone formatters ──────────────────────────────────────────────────────
 
   function handlePhoneChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const formatted = formatPhone(e.target.value);
-    formik.setFieldValue("phone", formatted);
+    formik.setFieldValue("phone", formatPhone(e.target.value));
   }
-
-  function handleFaxChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const formatted = formatPhone(e.target.value);
-    formik.setFieldValue("fax", formatted);
-  }
-
   function handleDirectChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const formatted = formatPhone(e.target.value);
-    formik.setFieldValue("direct", formatted);
+    formik.setFieldValue("direct", formatPhone(e.target.value));
   }
-
   function handleSmsChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const formatted = formatPhone(e.target.value);
-    formik.setFieldValue("sms", formatted);
+    formik.setFieldValue("sms", formatPhone(e.target.value));
+  }
+  function handleFaxChange(e: React.ChangeEvent<HTMLInputElement>) {
+    formik.setFieldValue("fax", formatPhone(e.target.value));
   }
 
   // ── Upload ────────────────────────────────────────────────────────────────
@@ -308,7 +342,6 @@ export function useSignatureBuilder() {
     setUploadMsg("Processing partner logo…");
     setBusyUpload(true);
 
-    // Revocar blob URL anterior
     if (blobUrlRef.current) {
       URL.revokeObjectURL(blobUrlRef.current);
       blobUrlRef.current = null;
@@ -328,7 +361,6 @@ export function useSignatureBuilder() {
 
       const json = JSON.parse(text) as UploadResult & { processed_base64: string };
 
-      // Crear blob URL local para el preview — sin tocar Cloudinary
       const byteArray = Uint8Array.from(atob(json.processed_base64), (c) => c.charCodeAt(0));
       const blob      = new Blob([byteArray], { type: "image/png" });
       const blobUrl   = URL.createObjectURL(blob);
@@ -336,8 +368,7 @@ export function useSignatureBuilder() {
 
       const logoResult: UploadResult = {
         ...json,
-        blob_url: blobUrl,
-        // Cloudinary fields siguen null — se rellenan al hacer commit
+        blob_url:    blobUrl,
         public_id:   null,
         secure_url:  null,
         display_url: null,
@@ -346,7 +377,6 @@ export function useSignatureBuilder() {
       setUploadedLogo(logoResult);
       setLogoDisplayWidth(json.width   || DEFAULT_LOGO_WIDTH);
       setLogoDisplayHeight(json.height || DEFAULT_LOGO_HEIGHT);
-
       setUploadMsg(
         json.skipEnhancement
           ? "Logo ready ✓"
@@ -362,17 +392,12 @@ export function useSignatureBuilder() {
   }
 
   // ── Commit a Cloudinary (lazy) ────────────────────────────────────────────
-  // Sube el logo a Cloudinary y actualiza el estado con las URLs reales.
-  // Si ya se hizo commit, no vuelve a subir.
 
-  // ensureCommitted: retorna el UploadResult con URLs de Cloudinary.
-  // Si ya tiene secure_url + display_url, lo retorna tal cual (no re-sube).
   async function ensureCommitted(logo: UploadResult): Promise<UploadResult> {
     if (logo.secure_url && logo.public_id && logo.display_url) return logo;
 
     const committed = await commitToCloudinary(logo);
 
-    // Persistir en estado para que la próxima llamada no vuelva a subir
     if (enhanced && logo === enhanced) {
       setEnhanced(committed);
     } else if (uploadedLogo && logo === uploadedLogo) {
@@ -382,9 +407,6 @@ export function useSignatureBuilder() {
     return committed;
   }
 
-  // resolveLogoUrl: URL final que va al clipboard/DB — siempre Cloudinary, nunca blob.
-  // Usa display_url (con c_fit transform del tamaño correcto) salvo que el usuario
-  // haya ajustado el size manualmente con el modal Resize.
   function resolveLogoUrl(committed: UploadResult, w: number, h: number, currentResizedUrl: string | null): string {
     if (currentResizedUrl) {
       return buildCloudinaryResizedUrl(committed.secure_url!, w, h);
@@ -393,8 +415,6 @@ export function useSignatureBuilder() {
   }
 
   // ── Enhance ───────────────────────────────────────────────────────────────
-  // Enhance sí sube a Cloudinary inmediatamente (es una acción deliberada del usuario
-  // y requiere un pipeline de IA — el URL real se necesita para enviar a GPT).
 
   async function handleEnhance() {
     if (!uploadedLogo || !rawFile) return;
@@ -412,7 +432,6 @@ export function useSignatureBuilder() {
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || "Enhance failed");
 
-      // Enhance devuelve URLs de Cloudinary directamente (ese pipeline lo requiere)
       setEnhanced(json);
       setLogoDisplayWidth(json.width   || DEFAULT_LOGO_WIDTH);
       setLogoDisplayHeight(json.height || DEFAULT_LOGO_HEIGHT);
@@ -431,16 +450,13 @@ export function useSignatureBuilder() {
     setLogoDisplayWidth(w);
     setLogoDisplayHeight(h);
 
-    // Si ya hay URL de Cloudinary (post-commit o post-enhance), usar transform
     const sourceUrl = activeLogo?.secure_url;
     if (sourceUrl) {
-      const resized = buildCloudinaryResizedUrl(sourceUrl, w, h);
-      setResizedLogoUrl(resized);
+      setResizedLogoUrl(buildCloudinaryResizedUrl(sourceUrl, w, h));
     }
-    // Si aún es blob URL, el preview usa solo width/height CSS — no hace falta transform
   }
 
-  // ── Save (+ auto-download letterhead) ────────────────────────────────────
+  // ── Save ──────────────────────────────────────────────────────────────────
 
   async function handleSave() {
     const errors = await formik.validateForm();
@@ -450,37 +466,43 @@ export function useSignatureBuilder() {
       );
       return;
     }
-    if (!hasUploadedLogo) {
+
+    if (logoRequired && !hasUploadedLogo) {
       setLogoError("Please upload a partner logo before saving");
       return;
     }
 
     setBusySave(true);
     try {
-      // ── Commit a Cloudinary si aún no se hizo ──────────────────────────────
-      setUploadMsg("Uploading logo…");
-      const committed = await ensureCommitted(activeLogo!);
-      setUploadMsg("");
+      let finalLogoUrl    = "";
+      let finalLogoWidth  = logoDisplayWidth;
+      let finalLogoHeight = logoDisplayHeight;
 
-      // URL final: display_url tiene el c_fit transform correcto. Si el usuario
-      // hizo resize manual usamos buildCloudinaryResizedUrl sobre secure_url.
-      const finalLogoUrl = resolveLogoUrl(committed, logoDisplayWidth, logoDisplayHeight, resizedLogoUrl);
+      if (logoRequired && activeLogo) {
+        setUploadMsg("Uploading logo…");
+        const committed = await ensureCommitted(activeLogo);
+        setUploadMsg("");
+        finalLogoUrl    = resolveLogoUrl(committed, logoDisplayWidth, logoDisplayHeight, resizedLogoUrl);
+        finalLogoWidth  = logoDisplayWidth;
+        finalLogoHeight = logoDisplayHeight;
+      }
 
       const payload = {
         name:              formik.values.name,
         fullName:          formik.values.fullName,
         title:             formik.values.title,
+        type:              signatureType,
         phone:             formik.values.phone,
-        fax:               formik.values.fax || null,
         direct:            formik.values.direct || null,
         sms:               formik.values.sms    || null,
+        fax:               formik.values.fax    || null,
         email:             formik.values.email,
-        address:           formik.values.address,
-        lic:               formik.values.lic || null,
+        address:           signatureType === "basic" ? (formik.values.address || DEFAULT_BASIC_ADDRESS) : formik.values.address,
+        lic:               formik.values.lic    || null,
         website:           formik.values.website || null,
-        partnerLogoUrl:    finalLogoUrl,
-        partnerLogoWidth:  logoDisplayWidth,
-        partnerLogoHeight: logoDisplayHeight,
+        partnerLogoUrl:    finalLogoUrl    || null,
+        partnerLogoWidth:  finalLogoUrl    ? finalLogoWidth  : null,
+        partnerLogoHeight: finalLogoUrl    ? finalLogoHeight : null,
       };
 
       const res = await fetch("/api/signatures", {
@@ -497,14 +519,15 @@ export function useSignatureBuilder() {
       toast.success("Signature saved!");
       invalidateSignatures();
 
-      // ── Auto-download letterhead después de guardar ────────────────────────
-      if (hasUploadedLogo) {
+      // Auto-download letterhead only for powered-by
+      if (signatureType === "powered-by" && activeLogo) {
         try {
+          const committed = await ensureCommitted(activeLogo);
           await triggerLetterheadDownload({
             partnerName:       formik.values.name || formik.values.fullName,
             phone:             formik.values.phone,
             fax:               formik.values.fax || "",
-            address:           formik.values.address,
+            address:           formik.values.address || DEFAULT_BASIC_ADDRESS,
             website:           formik.values.website || "",
             partnerLogoUrl:    committed.secure_url!,
             partnerLogoWidth:  logoDisplayWidth,
@@ -537,40 +560,44 @@ export function useSignatureBuilder() {
       );
     }
 
-    if (!hasUploadedLogo) {
+    if (logoRequired && !hasUploadedLogo) {
       setLogoError("Please upload a partner logo before copying");
     }
 
-    if (Object.keys(errorsWithoutName).length > 0 || !hasUploadedLogo) return;
+    if (Object.keys(errorsWithoutName).length > 0 || (logoRequired && !hasUploadedLogo)) return;
 
     try {
-      // Commit a Cloudinary — la firma se pega en Outlook y necesita URL pública.
-      // Si ya se hizo commit (ej: después de Save), retorna el objeto cacheado sin re-subir.
-      setUploadMsg("Uploading logo…");
-      const committed = await ensureCommitted(activeLogo!);
-      setUploadMsg("");
+      let finalLogoUrl    = "";
+      let finalLogoWidth  = logoDisplayWidth;
+      let finalLogoHeight = logoDisplayHeight;
 
-      // URL final con transform de Cloudinary — nunca blob URL en el clipboard
-      const finalLogoUrl = resolveLogoUrl(committed, logoDisplayWidth, logoDisplayHeight, resizedLogoUrl);
+      if (logoRequired && activeLogo) {
+        setUploadMsg("Uploading logo…");
+        const committed = await ensureCommitted(activeLogo!);
+        setUploadMsg("");
+        finalLogoUrl    = resolveLogoUrl(committed, logoDisplayWidth, logoDisplayHeight, resizedLogoUrl);
+        finalLogoWidth  = logoDisplayWidth;
+        finalLogoHeight = logoDisplayHeight;
+      }
 
-      const contactLines = [
-        `Phone: ${debouncedValues.phone}`,
-        debouncedValues.fax    ? `Fax: ${debouncedValues.fax}`       : null,
-        debouncedValues.direct ? `Direct: ${debouncedValues.direct}` : null,  // ← nuevo
-        debouncedValues.sms    ? `SMS: ${debouncedValues.sms}`       : null,  // ← nuevo
-      ].filter(Boolean).join("\n");
+      const contactLines = buildContactLines({
+        phone:  debouncedValues.phone,
+        direct: debouncedValues.direct,
+        sms:    debouncedValues.sms,
+        fax:    debouncedValues.fax,
+      });
 
       const html = buildOutlookSignatureHtml({
         fullName:          debouncedValues.fullName,
         title:             debouncedValues.title,
         contactLines,
         email:             debouncedValues.email,
-        address:           debouncedValues.address,
+        address:           signatureType === "basic" ? (debouncedValues.address || DEFAULT_BASIC_ADDRESS) : debouncedValues.address,
         lic:               debouncedValues.lic || undefined,
-        partnerLogoUrl:    finalLogoUrl,
-        partnerLogoWidth:  logoDisplayWidth,
-        partnerLogoHeight: logoDisplayHeight,
-        signatureType:     "powered-by",
+        partnerLogoUrl:    finalLogoUrl || undefined,
+        partnerLogoWidth:  finalLogoWidth,
+        partnerLogoHeight: finalLogoHeight,
+        signatureType,
       });
 
       await copyHtmlToClipboard(html);
@@ -593,6 +620,8 @@ export function useSignatureBuilder() {
     formik,
     debouncedValues,
     isPending,
+    signatureType,
+    setSignatureType,
     uploadedLogo,
     enhanced,
     logoUrl,
@@ -604,6 +633,7 @@ export function useSignatureBuilder() {
     logoDisplayWidth,
     logoDisplayHeight,
     hasUploadedLogo,
+    logoRequired,
     canEnhance,
     logoLoading,
     busyUpload,
@@ -619,9 +649,9 @@ export function useSignatureBuilder() {
     handleSave,
     handleCopy,
     handlePhoneChange,
-    handleFaxChange,
     handleDirectChange,
     handleSmsChange,
+    handleFaxChange,
     handleAddressChange,
   };
 }

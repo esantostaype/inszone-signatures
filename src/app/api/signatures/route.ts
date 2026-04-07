@@ -5,6 +5,8 @@ import { desc } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
+const DEFAULT_BASIC_ADDRESS = "4025 E. La Palma Ave, Suite 101\nAnaheim, CA 92807";
+
 // ── GET /api/signatures ───────────────────────────────────────
 export async function GET() {
   try {
@@ -26,12 +28,22 @@ export async function POST(request: NextRequest) {
 
     const {
       name, fullName, title,
-      phone, fax, direct, sms,              // ← antes: contactLines
+      type,
+      phone, fax, direct, sms,
       email, address, lic, website,
       partnerLogoUrl, partnerLogoWidth, partnerLogoHeight,
     } = body;
 
-    if (!name || !fullName || !title || !phone || !email || !address) {  // ← contactLines → phone
+    const validTypes = ["basic", "powered-by", "formerly"];
+    const signatureType = validTypes.includes(type) ? type : "powered-by";
+
+    // For "basic", address is optional — fall back to the default Inszone HQ address
+    const resolvedAddress =
+      signatureType === "basic"
+        ? (address?.trim() || DEFAULT_BASIC_ADDRESS)
+        : address;
+
+    if (!name || !fullName || !title || !phone || !email || !resolvedAddress) {
       return NextResponse.json(
         { success: false, message: "Missing required fields" },
         { status: 400 }
@@ -43,13 +55,14 @@ export async function POST(request: NextRequest) {
       name:              name.trim(),
       fullName:          fullName.trim(),
       title:             title.trim(),
-      phone:             phone.trim(),       // ← antes: contactLines
-      fax:               fax?.trim() || null, // ← nuevo (opcional)
-      direct:            direct?.trim() || null,   // ← nuevo
-      sms:               sms?.trim()    || null,   // ← nuevo
+      type:              signatureType,
+      phone:             phone.trim(),
+      fax:               fax?.trim()    || null,
+      direct:            direct?.trim() || null,
+      sms:               sms?.trim()    || null,
       email:             email.trim(),
-      address:           address.trim(),
-      lic:               lic?.trim() || null,
+      address:           resolvedAddress.trim(),
+      lic:               lic?.trim()     || null,
       website:           website?.trim() || null,
       partnerLogoUrl:    partnerLogoUrl    || null,
       partnerLogoWidth:  partnerLogoWidth  ? Number(partnerLogoWidth)  : null,

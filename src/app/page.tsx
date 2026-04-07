@@ -38,6 +38,7 @@ export default function SignatureGeneratorPage() {
         logoHeight={state.logoHeight}
         logoLoading={state.logoLoading}
         isPending={state.isPending}
+        signatureType={state.signatureType}
       />
     </>
   );

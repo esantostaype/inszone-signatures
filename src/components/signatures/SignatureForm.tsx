@@ -9,7 +9,7 @@ import Textarea from "@mui/joy/Textarea";
 import Typography from "@mui/joy/Typography";
 import { LogoUploader } from "@/components/signatures/LogoUploader";
 import { SignatureActions } from "@/components/signatures/SignatureActions";
-import { FIELD_MAX_LENGTH, type useSignatureBuilder } from "@/hooks/useSignatureBuilder";
+import { FIELD_MAX_LENGTH, type useSignatureBuilder, type SignatureType } from "@/hooks/useSignatureBuilder";
 
 type BuilderState = ReturnType<typeof useSignatureBuilder>;
 
@@ -17,9 +17,77 @@ interface SignatureFormProps {
   state: BuilderState;
 }
 
+// ── Type selector ─────────────────────────────────────────────
+
+const SIGNATURE_TYPES: { value: SignatureType; label: string; description: string }[] = [
+  { value: "basic",       label: "Basic",                description: "Inszone logo only, no partner branding" },
+  { value: "powered-by",  label: "Powered By",           description: "Partner logo + powered by Inszone" },
+  { value: "formerly",    label: "Formerly Operating As", description: "Inszone logo + formerly partner name" },
+];
+
+function TypeSelector({
+  value,
+  onChange,
+}: {
+  value: SignatureType;
+  onChange: (v: SignatureType) => void;
+}) {
+  return (
+    <div>
+      <FormLabel sx={{ mb: 1 }}>Signature Type *</FormLabel>
+      <div className="flex gap-2 flex-wrap">
+        {SIGNATURE_TYPES.map((t) => (
+          <button
+            key={t.value}
+            type="button"
+            onClick={() => onChange(t.value)}
+            style={{
+              flex: "1 1 auto",
+              minWidth: 120,
+              padding: "10px 14px",
+              borderRadius: 8,
+              border: value === t.value
+                ? "2px solid var(--joy-palette-primary-500, #0B6BCB)"
+                : "2px solid var(--joy-palette-neutral-outlinedBorder, rgba(99,107,116,0.3))",
+              background: value === t.value
+                ? "var(--joy-palette-primary-softBg, rgba(11,107,203,0.12))"
+                : "var(--joy-palette-background-surface, #fff)",
+              cursor: "pointer",
+              textAlign: "left",
+              transition: "all 0.15s",
+            }}
+          >
+            <div style={{
+              fontWeight: 600,
+              fontSize: 13,
+              color: value === t.value
+                ? "var(--joy-palette-primary-600, #0B6BCB)"
+                : "var(--joy-palette-text-primary)",
+              marginBottom: 2,
+            }}>
+              {t.label}
+            </div>
+            <div style={{
+              fontSize: 11,
+              color: "var(--joy-palette-text-tertiary)",
+              lineHeight: 1.3,
+            }}>
+              {t.description}
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Main form ─────────────────────────────────────────────────
+
 export function SignatureForm({ state }: SignatureFormProps) {
   const {
     formik,
+    signatureType,
+    setSignatureType,
     uploadedLogo,
     enhanced,
     hasUploadedLogo,
@@ -43,20 +111,26 @@ export function SignatureForm({ state }: SignatureFormProps) {
     handleSave,
     handleCopy,
     handlePhoneChange,
-    handleFaxChange,
     handleDirectChange,
     handleSmsChange,
-    handleAddressChange
+    handleFaxChange,
+    handleAddressChange,
   } = state;
 
   const { values, errors, touched, handleChange, handleBlur } = formik;
 
+  const showLogoUploader = signatureType !== "basic";
+
   return (
     <div>
-      {/* ── Grid 2 columns ──────────────────────────────────── */}
       <div className="grid md:grid-cols-2 gap-4">
 
-        {/* Name — col span 2 */}
+        {/* ── Type selector — col span 2 ───────────────────────── */}
+        <div className="col-span-2">
+          <TypeSelector value={signatureType} onChange={setSignatureType} />
+        </div>
+
+        {/* ── Signature Name — col span 2 ─────────────────────── */}
         <FormControl
           error={Boolean(touched.name && errors.name)}
           className="col-span-2"
@@ -74,7 +148,7 @@ export function SignatureForm({ state }: SignatureFormProps) {
             Use the partner company name — this is how you'll find this signature later.
           </Typography>
           {touched.name && errors.name && (
-            <Typography level="body-xs" color="danger" sx={{ mt: 0.5 }} >{errors.name}</Typography>
+            <Typography level="body-xs" color="danger" sx={{ mt: 0.5 }}>{errors.name}</Typography>
           )}
         </FormControl>
 
@@ -110,6 +184,7 @@ export function SignatureForm({ state }: SignatureFormProps) {
           )}
         </FormControl>
 
+        {/* Phone */}
         <FormControl error={Boolean(touched.phone && errors.phone)}>
           <FormLabel>Phone *</FormLabel>
           <Input
@@ -124,21 +199,9 @@ export function SignatureForm({ state }: SignatureFormProps) {
           )}
         </FormControl>
 
-        {/* Fax */}
+        {/* Office (direct) */}
         <FormControl>
-          <FormLabel>Fax (optional)</FormLabel>
-          <Input
-            name="fax"
-            placeholder="e.g. 479-394-2249"
-            value={values.fax}
-            onChange={handleFaxChange}
-            onBlur={handleBlur}
-          />
-        </FormControl>
-
-        {/* Direct */}
-        <FormControl>
-          <FormLabel>Direct (optional)</FormLabel>
+          <FormLabel>Office (optional)</FormLabel>
           <Input
             name="direct"
             placeholder="e.g. 479-394-2250"
@@ -156,6 +219,18 @@ export function SignatureForm({ state }: SignatureFormProps) {
             placeholder="e.g. 479-394-2251"
             value={values.sms}
             onChange={handleSmsChange}
+            onBlur={handleBlur}
+          />
+        </FormControl>
+
+        {/* Fax */}
+        <FormControl>
+          <FormLabel>Fax (optional)</FormLabel>
+          <Input
+            name="fax"
+            placeholder="e.g. 479-394-2249"
+            value={values.fax}
+            onChange={handleFaxChange}
             onBlur={handleBlur}
           />
         </FormControl>
@@ -189,14 +264,18 @@ export function SignatureForm({ state }: SignatureFormProps) {
           />
         </FormControl>
 
-        {/* Address */}
+        {/* Address — always shown; basic uses default HQ address */}
         <FormControl error={Boolean(touched.address && errors.address)} className="col-span-2">
-          <FormLabel>Address *</FormLabel>
+          <FormLabel>
+            {signatureType === "basic" ? "Address (defaults to Inszone HQ)" : "Address *"}
+          </FormLabel>
           <Textarea
             name="address"
             minRows={2}
             maxRows={2}
-            placeholder={"e.g. 206 Highway 71 N.\nMena, AR 71953"}
+            placeholder={signatureType === "basic"
+              ? "4025 E. La Palma Ave, Suite 101\nAnaheim, CA 92807"
+              : "e.g. 206 Highway 71 N.\nMena, AR 71953"}
             value={values.address}
             onChange={handleAddressChange}
             onBlur={handleBlur}
@@ -207,46 +286,49 @@ export function SignatureForm({ state }: SignatureFormProps) {
           )}
         </FormControl>
 
-        {/* Website */}
-        <FormControl className="col-span-2">
-          <FormLabel>Website (optional)</FormLabel>
-          <Input
-            name="website"
-            placeholder="e.g. cayias.com"
-            value={values.website}
-            onChange={handleChange}
-            onBlur={handleBlur}
-            slotProps={{ input: { maxLength: FIELD_MAX_LENGTH.website } }}
-          />
-        </FormControl>
+        {/* Website — only for powered-by and formerly */}
+        {signatureType !== "basic" && (
+          <FormControl className="col-span-2">
+            <FormLabel>Website (optional)</FormLabel>
+            <Input
+              name="website"
+              placeholder="e.g. cayias.com"
+              value={values.website}
+              onChange={handleChange}
+              onBlur={handleBlur}
+              slotProps={{ input: { maxLength: FIELD_MAX_LENGTH.website } }}
+            />
+          </FormControl>
+        )}
 
-        {/* Partner Logo — col span 2 */}
-        <div className="col-span-2">
-          <LogoUploader
-            onUpload={handleUpload}
-            onEnhance={handleEnhance}
-            onResizeSave={handleResizeSave}
-            canEnhance={canEnhance}
-            busyUpload={busyUpload}
-            busyEnhance={busyEnhance}
-            uploadMsg={uploadMsg}
-            uploadErr={uploadErr}
-            logoError={logoError}
-            hasLogo={hasUploadedLogo}
-            hasEnhanced={!!enhanced}
-            skipEnhancement={uploadedLogo?.skipEnhancement}
-            logoUrl={logoUrl}
-            logoSecureUrl={logoSecureUrl}
-            logoDisplayWidth={logoDisplayWidth}
-            logoDisplayHeight={logoDisplayHeight}
-            originalWidth={originalLogoWidth}
-            originalHeight={originalLogoHeight}
-          />
-        </div>
+        {/* Partner Logo — only for powered-by and formerly */}
+        {showLogoUploader && (
+          <div className="col-span-2">
+            <LogoUploader
+              onUpload={handleUpload}
+              onEnhance={handleEnhance}
+              onResizeSave={handleResizeSave}
+              canEnhance={canEnhance}
+              busyUpload={busyUpload}
+              busyEnhance={busyEnhance}
+              uploadMsg={uploadMsg}
+              uploadErr={uploadErr}
+              logoError={logoError}
+              hasLogo={hasUploadedLogo}
+              hasEnhanced={!!enhanced}
+              skipEnhancement={uploadedLogo?.skipEnhancement}
+              logoUrl={logoUrl}
+              logoSecureUrl={logoSecureUrl}
+              logoDisplayWidth={logoDisplayWidth}
+              logoDisplayHeight={logoDisplayHeight}
+              originalWidth={originalLogoWidth}
+              originalHeight={originalLogoHeight}
+            />
+          </div>
+        )}
       </div>
 
       {/* ── Actions ─────────────────────────────────────────── */}
-      {/* Save Signature also auto-downloads the letterhead */}
       <SignatureActions
         onSave={handleSave}
         onCopy={handleCopy}
