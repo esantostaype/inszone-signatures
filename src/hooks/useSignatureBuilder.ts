@@ -25,16 +25,16 @@ type SmartPlan =
   | { kind: "BADGE" };
 
 export const FIELD_MAX_LENGTH = {
-  name:     64,
-  fullName:  32,
-  title:     32,
+  name:     128,
+  fullName:  64,
+  title:     64,
   phone:     14,
   fax:       14,
   direct:    14,
   sms:       14,
-  email:    32,
-  address:  64,
-  website:  32,
+  email:    64,
+  address:  128,
+  website:  64,
   lic:       16,
 } as const;
 
