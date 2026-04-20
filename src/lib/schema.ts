@@ -12,7 +12,7 @@ export const signatures = sqliteTable("signatures", {
   direct:            text("direct"),
   sms:               text("sms"),
   email:             text("email").notNull(),
-  address:           text("address").notNull(),
+  address:           text("address"),
   website:           text("website"),
   lic:               text("lic"),
   partnerLogoUrl:    text("partner_logo_url"),
