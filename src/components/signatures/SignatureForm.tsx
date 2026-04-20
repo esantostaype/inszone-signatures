@@ -340,11 +340,6 @@ export function SignatureForm({ state }: SignatureFormProps) {
                 Certificate Request?
               </span>
             </label>
-            {certRequest && (
-              <span style={{ fontSize: 12, color: "#cc0000", fontWeight: 500 }}>
-                Fax: 916-636-0134 · Email: certs@inszoneins.com
-              </span>
-            )}
           </div>
         )}
 
@@ -359,9 +354,6 @@ export function SignatureForm({ state }: SignatureFormProps) {
             onBlur={handleBlur}
             slotProps={{ input: { maxLength: FIELD_MAX_LENGTH.reviewLink } }}
           />
-          <Typography level="body-sm" sx={{ mt: 0.5 }} color="neutral">
-            Adds "Did I provide you with excellent service? Click <strong>here</strong> to submit a review!" below the signature.
-          </Typography>
         </FormControl>
 
         {/* Partner Logo — only for powered-by and formerly */}
