@@ -5,8 +5,6 @@ import { desc } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
-const DEFAULT_BASIC_ADDRESS = "4025 E. La Palma Ave, Suite 101\nAnaheim, CA 92807";
-
 // ── GET /api/signatures ───────────────────────────────────────
 export async function GET() {
   try {
@@ -32,18 +30,16 @@ export async function POST(request: NextRequest) {
       phone, fax, direct, sms,
       email, address, lic, website,
       partnerLogoUrl, partnerLogoWidth, partnerLogoHeight,
+      certRequest, reviewLink,
     } = body;
 
     const validTypes = ["basic", "powered-by", "formerly"];
     const signatureType = validTypes.includes(type) ? type : "powered-by";
 
-    // For "basic", address is optional — fall back to the default Inszone HQ address
-    const resolvedAddress =
-      signatureType === "basic"
-        ? (address?.trim() || DEFAULT_BASIC_ADDRESS)
-        : address;
+    // Address is optional for all types; basic falls back to HQ address
+    const resolvedAddress = address?.trim() || null;
 
-    if (!name || !fullName || !title || !phone || !email || !resolvedAddress) {
+    if (!name || !fullName || !title || !phone || !email) {
       return NextResponse.json(
         { success: false, message: "Missing required fields" },
         { status: 400 }
@@ -57,16 +53,18 @@ export async function POST(request: NextRequest) {
       title:             title.trim(),
       type:              signatureType,
       phone:             phone.trim(),
-      fax:               fax?.trim()    || null,
-      direct:            direct?.trim() || null,
-      sms:               sms?.trim()    || null,
+      fax:               fax?.trim()     || null,
+      direct:            direct?.trim()  || null,
+      sms:               sms?.trim()     || null,
       email:             email.trim(),
-      address:           resolvedAddress.trim(),
+      address:           resolvedAddress,
       lic:               lic?.trim()     || null,
       website:           website?.trim() || null,
       partnerLogoUrl:    partnerLogoUrl    || null,
       partnerLogoWidth:  partnerLogoWidth  ? Number(partnerLogoWidth)  : null,
       partnerLogoHeight: partnerLogoHeight ? Number(partnerLogoHeight) : null,
+      certRequest:       certRequest === true || certRequest === 1 ? true : false,
+      reviewLink:        reviewLink?.trim() || null,
     };
 
     await db.insert(signatures).values(newSignature);

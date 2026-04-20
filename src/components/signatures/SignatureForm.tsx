@@ -88,6 +88,8 @@ export function SignatureForm({ state }: SignatureFormProps) {
     formik,
     signatureType,
     setSignatureType,
+    certRequest,
+    setCertRequest,
     uploadedLogo,
     enhanced,
     hasUploadedLogo,
@@ -264,10 +266,10 @@ export function SignatureForm({ state }: SignatureFormProps) {
           />
         </FormControl>
 
-        {/* Address — always shown; basic uses default HQ address */}
+        {/* Address — always shown, always optional */}
         <FormControl error={Boolean(touched.address && errors.address)} className="col-span-2">
           <FormLabel>
-            {signatureType === "basic" ? "Address (defaults to Inszone HQ)" : "Address *"}
+            {signatureType === "basic" ? "Address (defaults to Inszone HQ)" : "Address (optional)"}
           </FormLabel>
           <Textarea
             name="address"
@@ -300,6 +302,67 @@ export function SignatureForm({ state }: SignatureFormProps) {
             />
           </FormControl>
         )}
+
+        {/* Certificate Request — only for basic and formerly */}
+        {(signatureType === "basic" || signatureType === "formerly") && (
+          <div className="col-span-2" style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", userSelect: "none" }}>
+              <div
+                role="switch"
+                aria-checked={certRequest}
+                onClick={() => setCertRequest(!certRequest)}
+                style={{
+                  position: "relative",
+                  width: 44,
+                  height: 24,
+                  borderRadius: 12,
+                  backgroundColor: certRequest
+                    ? "var(--joy-palette-primary-500, #0B6BCB)"
+                    : "var(--joy-palette-neutral-outlinedBorder, rgba(99,107,116,0.4))",
+                  cursor: "pointer",
+                  transition: "background 0.2s",
+                  flexShrink: 0,
+                }}
+              >
+                <div style={{
+                  position: "absolute",
+                  top: 3,
+                  left: certRequest ? 23 : 3,
+                  width: 18,
+                  height: 18,
+                  borderRadius: "50%",
+                  backgroundColor: "#fff",
+                  transition: "left 0.2s",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+                }} />
+              </div>
+              <span style={{ fontSize: 14, fontWeight: 500, color: "var(--joy-palette-text-primary)" }}>
+                Certificate Request?
+              </span>
+            </label>
+            {certRequest && (
+              <span style={{ fontSize: 12, color: "#cc0000", fontWeight: 500 }}>
+                Fax: 916-636-0134 · Email: certs@inszoneins.com
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Review Link — all types */}
+        <FormControl className="col-span-2">
+          <FormLabel>Review Link (optional)</FormLabel>
+          <Input
+            name="reviewLink"
+            placeholder="e.g. https://g.page/r/..."
+            value={values.reviewLink}
+            onChange={handleChange}
+            onBlur={handleBlur}
+            slotProps={{ input: { maxLength: FIELD_MAX_LENGTH.reviewLink } }}
+          />
+          <Typography level="body-sm" sx={{ mt: 0.5 }} color="neutral">
+            Adds "Did I provide you with excellent service? Click <strong>here</strong> to submit a review!" below the signature.
+          </Typography>
+        </FormControl>
 
         {/* Partner Logo — only for powered-by and formerly */}
         {showLogoUploader && (

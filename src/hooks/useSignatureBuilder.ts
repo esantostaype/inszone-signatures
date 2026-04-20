@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 // src/hooks/useSignatureBuilder.ts
 import * as React from "react";
@@ -25,17 +26,18 @@ type SmartPlan =
   | { kind: "BADGE" };
 
 export const FIELD_MAX_LENGTH = {
-  name:     128,
-  fullName:  64,
-  title:     64,
-  phone:     14,
-  fax:       14,
-  direct:    14,
-  sms:       14,
-  email:    64,
-  address:  128,
-  website:  64,
-  lic:       16,
+  name:       128,
+  fullName:    64,
+  title:       64,
+  phone:       14,
+  fax:         14,
+  direct:      14,
+  sms:         14,
+  email:      64,
+  address:    128,
+  website:    64,
+  lic:         16,
+  reviewLink: 256,
 } as const;
 
 export type UploadResult = {
@@ -66,14 +68,12 @@ export type SignatureFormValues = {
   address:  string;
   website:  string;
   lic:      string;
+  reviewLink: string;
 };
 
 // ── Validation ────────────────────────────────────────────────────────────────
 
-const DEFAULT_BASIC_ADDRESS = "4025 E. La Palma Ave, Suite 101\nAnaheim, CA 92807";
-
-function buildSchema(signatureType: SignatureType) {
-  const isBasic = signatureType === "basic";
+function buildSchema(_signatureType: SignatureType) {
   return Yup.object({
     name:     Yup.string().trim().min(2).max(FIELD_MAX_LENGTH.name, `Max ${FIELD_MAX_LENGTH.name} characters`).required("Signature name is required"),
     fullName: Yup.string().trim().min(2).max(FIELD_MAX_LENGTH.fullName, `Max ${FIELD_MAX_LENGTH.fullName} characters`).required("Full name is required"),
@@ -83,17 +83,14 @@ function buildSchema(signatureType: SignatureType) {
     sms:      Yup.string().trim().max(FIELD_MAX_LENGTH.sms).optional(),
     fax:      Yup.string().trim().max(FIELD_MAX_LENGTH.fax).optional(),
     email:    Yup.string().trim().email("Invalid email").max(FIELD_MAX_LENGTH.email, `Max ${FIELD_MAX_LENGTH.email} characters`).required("Email is required"),
-    address:  isBasic
-      ? Yup.string().trim().max(FIELD_MAX_LENGTH.address, `Max ${FIELD_MAX_LENGTH.address} characters`).optional()
-      : Yup.string().trim().min(2)
-          .max(FIELD_MAX_LENGTH.address, `Max ${FIELD_MAX_LENGTH.address} characters`)
-          .test("max-lines", "Address can have at most 2 lines", (val) => {
-            if (!val) return true;
-            return (val.match(/\n/g) || []).length < 2;
-          })
-          .required("Address is required"),
+    address:  Yup.string().trim().max(FIELD_MAX_LENGTH.address, `Max ${FIELD_MAX_LENGTH.address} characters`)
+      .test("max-lines", "Address can have at most 2 lines", (val) => {
+        if (!val) return true;
+        return (val.match(/\n/g) || []).length < 2;
+      }).optional(),
     website:  Yup.string().trim().max(FIELD_MAX_LENGTH.website, `Max ${FIELD_MAX_LENGTH.website} characters`).optional(),
     lic:      Yup.string().trim().max(FIELD_MAX_LENGTH.lic, `Max ${FIELD_MAX_LENGTH.lic} characters`).optional(),
+    reviewLink: Yup.string().trim().max(256).optional(),
   });
 }
 
@@ -235,6 +232,7 @@ export function useSignatureBuilder() {
   const invalidateSignatures = useInvalidateSignatures();
 
   const [signatureType,     setSignatureType]      = React.useState<SignatureType>("powered-by");
+  const [certRequest,       setCertRequest]         = React.useState(false);
   const [uploadedLogo,      setUploadedLogo]        = React.useState<UploadResult | null>(null);
   const [enhanced,          setEnhanced]             = React.useState<UploadResult | null>(null);
   const [rawFile,           setRawFile]              = React.useState<File | null>(null);
@@ -271,7 +269,7 @@ export function useSignatureBuilder() {
       }
       // Pre-fill address with default HQ address for basic type
       if (!formik.values.address.trim()) {
-        formik.setFieldValue("address", DEFAULT_BASIC_ADDRESS);
+        formik.setFieldValue("address", "");
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -308,6 +306,7 @@ export function useSignatureBuilder() {
       address:  "",
       website:  "",
       lic:      "",
+      reviewLink: "",
     },
     validationSchema,
     onSubmit: () => {},
@@ -497,12 +496,14 @@ export function useSignatureBuilder() {
         sms:               formik.values.sms    || null,
         fax:               formik.values.fax    || null,
         email:             formik.values.email,
-        address:           signatureType === "basic" ? (formik.values.address || DEFAULT_BASIC_ADDRESS) : formik.values.address,
+        address:           formik.values.address?.trim() || null,
         lic:               formik.values.lic    || null,
         website:           formik.values.website || null,
         partnerLogoUrl:    finalLogoUrl    || null,
         partnerLogoWidth:  finalLogoUrl    ? finalLogoWidth  : null,
         partnerLogoHeight: finalLogoUrl    ? finalLogoHeight : null,
+        certRequest,
+        reviewLink:        formik.values.reviewLink || null,
       };
 
       const res = await fetch("/api/signatures", {
@@ -527,7 +528,7 @@ export function useSignatureBuilder() {
             partnerName:       formik.values.name || formik.values.fullName,
             phone:             formik.values.phone,
             fax:               formik.values.fax || "",
-            address:           formik.values.address || DEFAULT_BASIC_ADDRESS,
+            address:           formik.values.address || "",
             website:           formik.values.website || "",
             partnerLogoUrl:    committed.secure_url!,
             partnerLogoWidth:  logoDisplayWidth,
@@ -592,12 +593,14 @@ export function useSignatureBuilder() {
         title:             debouncedValues.title,
         contactLines,
         email:             debouncedValues.email,
-        address:           signatureType === "basic" ? (debouncedValues.address || DEFAULT_BASIC_ADDRESS) : debouncedValues.address,
+        address:           debouncedValues.address?.trim() || "",
         lic:               debouncedValues.lic || undefined,
         partnerLogoUrl:    finalLogoUrl || undefined,
         partnerLogoWidth:  finalLogoWidth,
         partnerLogoHeight: finalLogoHeight,
         signatureType,
+        certRequest,
+        reviewLink:        debouncedValues.reviewLink || undefined,
       });
 
       await copyHtmlToClipboard(html);
@@ -622,6 +625,8 @@ export function useSignatureBuilder() {
     isPending,
     signatureType,
     setSignatureType,
+    certRequest,
+    setCertRequest,
     uploadedLogo,
     enhanced,
     logoUrl,

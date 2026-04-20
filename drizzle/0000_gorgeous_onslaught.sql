@@ -1,0 +1,22 @@
+CREATE TABLE `signatures` (
+	`id` text PRIMARY KEY NOT NULL,
+	`name` text NOT NULL,
+	`full_name` text NOT NULL,
+	`title` text NOT NULL,
+	`type` text DEFAULT 'powered-by' NOT NULL,
+	`phone` text NOT NULL,
+	`fax` text,
+	`direct` text,
+	`sms` text,
+	`email` text NOT NULL,
+	`address` text,
+	`website` text,
+	`lic` text,
+	`partner_logo_url` text,
+	`partner_logo_width` integer,
+	`partner_logo_height` integer,
+	`cert_request` integer DEFAULT false,
+	`review_link` text,
+	`created_at` text DEFAULT (CURRENT_TIMESTAMP),
+	`updated_at` text DEFAULT (CURRENT_TIMESTAMP)
+);

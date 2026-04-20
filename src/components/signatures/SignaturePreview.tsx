@@ -17,7 +17,6 @@ const INSZONE_LOGO_URL     = "https://inszoneinsurance.com/wp-content/uploads/20
 const FACEBOOK_URL         = "https://inszoneinsurance.com/wp-content/uploads/2026/02/facebook.png";
 const TWITTER_URL          = "https://inszoneinsurance.com/wp-content/uploads/2026/02/twitter.png";
 const LINKEDIN_URL         = "https://inszoneinsurance.com/wp-content/uploads/2026/02/linkedin.png";
-const DEFAULT_BASIC_ADDRESS = "4025 E. La Palma Ave, Suite 101\nAnaheim, CA 92807";
 
 // ── Colors ────────────────────────────────────────────────────
 
@@ -32,19 +31,19 @@ function getPreviewColors(isDark: boolean, signatureType: SignatureType): Previe
     return {
       bg:         "#1e1e35",
       border:     "#A4B6D8",
-      nameColor:  isBasic ? "#D1D5DB" : "#A4B6D8",   // basic: same as text
-      textColor:  "#D1D5DB",
+      nameColor:  isBasic ? "#fff" : "#A4B6D8",   // basic: same as text
+      textColor:  "#fff",
       linkColor:  "#A4B6D8",
-      mutedColor: "#D1D5DB",
+      mutedColor: "#fff",
     };
   }
   return {
     bg:         "#ffffff",
     border:     "#6F8CC0",
-    nameColor:  isBasic ? "#364153" : "#6F8CC0",     // basic: same as text
-    textColor:  "#364153",
+    nameColor:  isBasic ? "#000" : "#6F8CC0",     // basic: same as text
+    textColor:  "#000",
     linkColor:  "#6F8CC0",
-    mutedColor: "#364153",
+    mutedColor: "#000",
   };
 }
 
@@ -96,11 +95,13 @@ function RightColumn({
         <p style={{ margin: "0", textAlign: "left" }}>
           {inszoneImg}
         </p>
+        {basicAddress.trim() && (
         <p style={{ margin: "12px 0 0", textAlign: "left", color: c.textColor, fontSize: 12, lineHeight: "16px" }}>
           {basicAddress.trim().split("\n").map((line, i) => (
             <React.Fragment key={i}>{line}<br /></React.Fragment>
           ))}
         </p>
+        )}
       </>
     );
   }
@@ -109,7 +110,7 @@ function RightColumn({
     return (
       <>
         <p style={{ margin: "0", textAlign: "center" }}>{inszoneImg}</p>
-        <p style={{ margin: "8px 0", color: c.linkColor, fontWeight: "bold", textAlign: "center" }}>
+        <p style={{ margin: "12px 0", color: c.linkColor, fontWeight: "bold", textAlign: "center" }}>
           formerly operating as
         </p>
         <p style={{ margin: "0", textAlign: "center" }}>{partnerImg}</p>
@@ -139,9 +140,11 @@ interface SignatureTableProps {
   logoHeight:    number;
   isDark:        boolean;
   logoLoading:   boolean;
+  certRequest:   boolean;
+  reviewLink:    string;
 }
 
-function SignatureTable({ values, signatureType, logoUrl, logoWidth, logoHeight, isDark, logoLoading }: SignatureTableProps) {
+function SignatureTable({ values, signatureType, logoUrl, logoWidth, logoHeight, isDark, logoLoading, certRequest, reviewLink }: SignatureTableProps) {
   const c = getPreviewColors(isDark, signatureType);
 
   // Contact lines: Phone, Office (direct), SMS, Fax
@@ -155,9 +158,8 @@ function SignatureTable({ values, signatureType, logoUrl, logoWidth, logoHeight,
     <React.Fragment key={i}>{line}<br /></React.Fragment>
   ));
 
-  const resolvedAddress = (signatureType === "basic" && !values.address.trim())
-    ? DEFAULT_BASIC_ADDRESS
-    : values.address;
+  const resolvedAddress = (values.address ?? "").trim();
+
   const addressLines = resolvedAddress.trim().split("\n").map((line, i) => (
     <React.Fragment key={i}>{line}<br /></React.Fragment>
   ));
@@ -167,73 +169,92 @@ function SignatureTable({ values, signatureType, logoUrl, logoWidth, logoHeight,
   ));
 
   return (
-    <table cellPadding={0} cellSpacing={0} style={{
-      borderCollapse: "collapse",
-      fontFamily: "Arial, sans-serif",
-      fontSize: 12,
-      lineHeight: "16px",
-      color: c.textColor,
-    }}>
-      <tbody>
-        <tr>
-          {/* Left column */}
-          <td valign="top" style={{ textAlign: "right", paddingRight: 16, borderRight: `2px solid ${c.border}`, whiteSpace: "nowrap" }}>
-            <p style={{ margin: "0 0 6px", fontSize: 19, color: c.nameColor }}>
-              <strong>{values.fullName || "Full Name"}</strong>
-            </p>
-            <p style={{ margin: 0, color: c.textColor, fontSize: 12, lineHeight: "14px" }}>
-              {titleLines || "Job Title"}
-            </p>
-            <p style={{ margin: "12px 0 0", color: c.textColor }}>
-              {contactLineElements}
-              <a href={`mailto:${values.email}`} style={{ color: c.linkColor, textDecoration: "underline" }}>
-                {values.email || "email@example.com"}
-              </a>
-            </p>
-            {signatureType !== "basic" && (
-              <p style={{ margin: "12px 0 0", color: c.textColor }}>{addressLines}</p>
-            )}
-            {values.lic && (
-              <p style={{ margin: "12px 0 0", letterSpacing: "1.5pt", color: c.textColor }}>{values.lic}</p>
-            )}
-            <p style={{ margin: "12px 0 0", display: "flex", justifyContent: "flex-end", gap: 4 }}>
-              <a href="https://www.facebook.com/InszoneInsuranceServices/" target="_blank" rel="noreferrer" style={{ display: "inline", textDecoration: "none" }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={FACEBOOK_URL} alt="Facebook" style={{ display: "inline" }} />
-              </a>
-              <a href="https://twitter.com/InszoneIns" target="_blank" rel="noreferrer" style={{ display: "inline", textDecoration: "none" }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={TWITTER_URL} alt="Twitter" style={{ display: "inline" }} />
-              </a>
-              <a href="https://www.linkedin.com/company/inszone-insurance-services-inc-" target="_blank" rel="noreferrer" style={{ display: "inline", textDecoration: "none" }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={LINKEDIN_URL} alt="LinkedIn" style={{ display: "inline" }} />
-              </a>
-            </p>
-          </td>
+    <div style={{ display: "inline-block" }}>
+      <table cellPadding={0} cellSpacing={0} style={{
+        borderCollapse: "collapse",
+        fontFamily: "Arial, sans-serif",
+        fontSize: 12,
+        lineHeight: "16px",
+        color: c.textColor,
+      }}>
+        <tbody>
+          <tr>
+            {/* Left column */}
+            <td valign="top" style={{ textAlign: "right", paddingRight: 16, borderRight: `2px solid ${c.border}`, whiteSpace: "nowrap" }}>
+              <p style={{ margin: "0 0 6px", fontSize: 19, color: c.nameColor }}>
+                <strong>{values.fullName || "Full Name"}</strong>
+              </p>
+              <p style={{ margin: 0, color: c.textColor, fontSize: 12, lineHeight: "14px" }}>
+                {titleLines || "Job Title"}
+              </p>
+              <p style={{ margin: "12px 0 0", color: c.textColor }}>
+                {contactLineElements}
+                <a href={`mailto:${values.email}`} style={{ color: c.linkColor, textDecoration: "underline" }}>
+                  {values.email || "email@example.com"}
+                </a>
+              </p>
+              {signatureType !== "basic" && resolvedAddress.trim() && (
+                <p style={{ margin: "12px 0 0", color: c.textColor }}>{addressLines}</p>
+              )}
+              {values.lic && (
+                <p style={{ margin: "12px 0 0", letterSpacing: "1.5pt", color: c.textColor }}>{values.lic}</p>
+              )}
+              <p style={{ margin: "12px 0 0", display: "flex", justifyContent: "flex-end", gap: 4 }}>
+                <a href="https://www.facebook.com/InszoneInsuranceServices/" target="_blank" rel="noreferrer" style={{ display: "inline", textDecoration: "none" }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={FACEBOOK_URL} alt="Facebook" style={{ display: "inline" }} />
+                </a>
+                <a href="https://twitter.com/InszoneIns" target="_blank" rel="noreferrer" style={{ display: "inline", textDecoration: "none" }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={TWITTER_URL} alt="Twitter" style={{ display: "inline" }} />
+                </a>
+                <a href="https://www.linkedin.com/company/inszone-insurance-services-inc-" target="_blank" rel="noreferrer" style={{ display: "inline", textDecoration: "none" }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={LINKEDIN_URL} alt="LinkedIn" style={{ display: "inline" }} />
+                </a>
+              </p>
+            </td>
 
-          {/* Right column */}
-          <td valign="top" style={{ paddingLeft: 16, textAlign: "center" }}>
-            <RightColumn
-              signatureType={signatureType}
-              logoUrl={logoUrl}
-              logoWidth={logoWidth}
-              logoHeight={logoHeight}
-              logoLoading={logoLoading}
-              isDark={isDark}
-              c={c}
-              basicAddress={resolvedAddress}
-            />
-            <p style={{ margin: "16px 0 8px", textAlign: "left" }}>
-              <a href="https://inszoneinsurance.com/" target="_blank" rel="noreferrer" style={{ color: c.linkColor, textDecoration: "underline" }}>
-                INSZONEINSURANCE.COM
-              </a>
-            </p>
-            <p style={{ margin: 0, letterSpacing: "1.5pt", color: c.mutedColor, textAlign: "left" }}>LIC #0F82764</p>
-          </td>
-        </tr>
-      </tbody>
-    </table>
+            {/* Right column */}
+            <td valign="top" style={{ paddingLeft: 16, textAlign: "center" }}>
+              <RightColumn
+                signatureType={signatureType}
+                logoUrl={logoUrl}
+                logoWidth={logoWidth}
+                logoHeight={logoHeight}
+                logoLoading={logoLoading}
+                isDark={isDark}
+                c={c}
+                basicAddress={resolvedAddress}
+              />
+              <p style={{ margin: "12px 0", textAlign: "left" }}>
+                <a href="https://inszoneinsurance.com/" target="_blank" rel="noreferrer" style={{ color: c.linkColor, textDecoration: "underline" }}>
+                  INSZONEINSURANCE.COM
+                </a>
+              </p>
+              <p style={{ margin: 0, letterSpacing: "1.5pt", color: c.mutedColor, textAlign: "left" }}>LIC #0F82764</p>
+              {certRequest && (signatureType === "basic" || signatureType === "formerly") && (
+                <p style={{ margin: "12px 0 0", fontSize: 12, lineHeight: "16px", textAlign: "left" }}>
+                  <span style={{ color: "#f00", fontWeight: "bold" }}>Certificate Request</span><br />
+                  Fax: 916-636-0134<br />
+                  Email:{" "}
+                  <a href="mailto:certs@inszoneins.com" style={{ color: c.linkColor, textDecoration: "underline" }}>
+                    certs@inszoneins.com
+                  </a>
+                </p>
+              )}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      {reviewLink && (
+        <div style={{ marginTop: 24, fontFamily: "Arial, sans-serif", fontSize: 12, lineHeight: "16px", color: c.textColor }}>
+          Did I provide you with excellent service? Click{" "}
+          <a href={reviewLink} target="_blank" rel="noreferrer" style={{ color: c.linkColor, textDecoration: "underline" }}>here</a>
+          {" "}to submit a review!
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -248,10 +269,12 @@ interface SignaturePreviewProps {
   logoLoading:   boolean;
   isPending:     boolean;
   withTitle?:    boolean;
+  certRequest:   boolean;
+  reviewLink:    string;
 }
 
 export function SignaturePreview({
-  values, signatureType, logoUrl, logoWidth, logoHeight, logoLoading, isPending, withTitle = true
+  values, signatureType, logoUrl, logoWidth, logoHeight, logoLoading, isPending, withTitle = true, certRequest, reviewLink
 }: SignaturePreviewProps) {
   const { mode, systemMode } = useColorScheme();
   const [mounted, setMounted] = React.useState(false);
@@ -292,6 +315,8 @@ export function SignaturePreview({
           logoHeight={logoHeight}
           isDark={isDark}
           logoLoading={logoLoading}
+          certRequest={certRequest}
+          reviewLink={reviewLink}
         />
       </div>
     </Box>

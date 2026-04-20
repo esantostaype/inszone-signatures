@@ -39,6 +39,8 @@ export interface SavedSignature {
   partnerLogoUrl:    string | null;
   partnerLogoWidth:  number | null;
   partnerLogoHeight: number | null;
+  certRequest:       boolean | null;
+  reviewLink:        string | null;
   createdAt:         string;
 }
 
@@ -72,7 +74,7 @@ async function triggerLetterheadDownload(row: SavedSignature): Promise<void> {
       partnerName:       row.name,
       phone:             row.phone  || "",
       fax:               row.fax   || "",
-      address:           row.address,
+      address:           row.address ?? "",
       website:           row.website || "",
       partnerLogoUrl:    row.partnerLogoUrl    || "",
       partnerLogoWidth:  row.partnerLogoWidth  || 152,
@@ -135,10 +137,11 @@ function SignaturePreviewContent({ row }: { row: SavedSignature }) {
         direct,
         sms,
         fax,
-        email:   row.email,
-        address: row.address,
-        website: row.website ?? "",
-        lic:     row.lic ?? "",
+        email:      row.email,
+        address:    row.address    ?? "",
+        website:    row.website ?? "",
+        lic:        row.lic ?? "",
+        reviewLink: row.reviewLink ?? "",
       }}
       signatureType={signatureType}
       logoUrl={row.partnerLogoUrl ?? ""}
@@ -147,6 +150,8 @@ function SignaturePreviewContent({ row }: { row: SavedSignature }) {
       logoLoading={false}
       isPending={false}
       withTitle={false}
+      certRequest={row.certRequest ?? false}
+      reviewLink={row.reviewLink ?? ""}
     />
   );
 }
@@ -195,6 +200,8 @@ function RowActions({ row, onDelete, onRefresh }: RowActionsProps) {
         partnerLogoWidth:  row.partnerLogoWidth  ?? undefined,
         partnerLogoHeight: row.partnerLogoHeight ?? undefined,
         signatureType,
+        certRequest:       row.certRequest ?? false,
+        reviewLink:        row.reviewLink  ?? undefined,
       });
 
       await copyHtmlToClipboard(html);
@@ -237,6 +244,8 @@ function RowActions({ row, onDelete, onRefresh }: RowActionsProps) {
         partnerLogoUrl:    row.partnerLogoUrl    || null,
         partnerLogoWidth:  row.partnerLogoWidth  || null,
         partnerLogoHeight: row.partnerLogoHeight || null,
+        certRequest:       row.certRequest ?? false,
+        reviewLink:        row.reviewLink  || null,
       };
 
       const res = await fetch("/api/signatures", {

@@ -18,6 +18,8 @@ export const signatures = sqliteTable("signatures", {
   partnerLogoUrl:    text("partner_logo_url"),
   partnerLogoWidth:  integer("partner_logo_width"),
   partnerLogoHeight: integer("partner_logo_height"),
+  certRequest:       integer("cert_request", { mode: "boolean" }).default(false),
+  reviewLink:        text("review_link"),
   createdAt:         text("created_at").default(sql`(CURRENT_TIMESTAMP)`),
   updatedAt:         text("updated_at").default(sql`(CURRENT_TIMESTAMP)`),
 });

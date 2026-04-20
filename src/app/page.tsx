@@ -39,6 +39,8 @@ export default function SignatureGeneratorPage() {
         logoLoading={state.logoLoading}
         isPending={state.isPending}
         signatureType={state.signatureType}
+        certRequest={state.certRequest}
+        reviewLink={state.formik.values.reviewLink}
       />
     </>
   );
