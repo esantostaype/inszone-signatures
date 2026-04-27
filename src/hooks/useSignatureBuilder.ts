@@ -138,6 +138,155 @@ export function formatPhone(raw: string): string {
   return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
 }
 
+// ── Address formatter ─────────────────────────────────────────────────────────
+
+/** Full name → 2-letter USPS abbreviation */
+const STATE_NAME_TO_ABBR: Record<string, string> = {
+  alabama: "AL", alaska: "AK", arizona: "AZ", arkansas: "AR",
+  california: "CA", colorado: "CO", connecticut: "CT", delaware: "DE",
+  florida: "FL", georgia: "GA", hawaii: "HI", idaho: "ID",
+  illinois: "IL", indiana: "IN", iowa: "IA", kansas: "KS",
+  kentucky: "KY", louisiana: "LA", maine: "ME", maryland: "MD",
+  massachusetts: "MA", michigan: "MI", minnesota: "MN", mississippi: "MS",
+  missouri: "MO", montana: "MT", nebraska: "NE", nevada: "NV",
+  "new hampshire": "NH", "new jersey": "NJ", "new mexico": "NM",
+  "new york": "NY", "north carolina": "NC", "north dakota": "ND",
+  ohio: "OH", oklahoma: "OK", oregon: "OR", pennsylvania: "PA",
+  "rhode island": "RI", "south carolina": "SC", "south dakota": "SD",
+  tennessee: "TN", texas: "TX", utah: "UT", vermont: "VT",
+  virginia: "VA", washington: "WA", "west virginia": "WV",
+  wisconsin: "WI", wyoming: "WY", "district of columbia": "DC",
+};
+
+/** All valid 2-letter USPS state abbreviations */
+const VALID_STATE_ABBRS = new Set(Object.values(STATE_NAME_TO_ABBR));
+
+/**
+ * Normalises a state token (full name or abbreviation) to a 2-letter abbreviation.
+ * Returns the original token (uppercased) if it cannot be resolved.
+ */
+function normalizeState(token: string): string {
+  const lower = token.trim().toLowerCase();
+  if (STATE_NAME_TO_ABBR[lower]) return STATE_NAME_TO_ABBR[lower];
+  const upper = token.trim().toUpperCase();
+  if (VALID_STATE_ABBRS.has(upper)) return upper;
+  return upper; // unknown → return as-is uppercased
+}
+
+/**
+ * Formats a free-form address string into exactly 2 lines:
+ *
+ *   Line 1: street + suite/unit
+ *   Line 2: City, ST ZIPCODE
+ *
+ * Handles separators:  newline · pipe (|) · em-dash (—) · en-dash (–) · hyphen (-)
+ * and the common "Street, Suite, City, State Zip" comma-separated pattern.
+ *
+ * If the input is already 2 lines and the second line already looks like
+ * "City, ST ZIP", it is returned normalised (state abbreviated) without
+ * further splitting.
+ */
+export function formatAddress(raw: string): string {
+  if (!raw.trim()) return "";
+
+  // ── Step 1: try explicit separators first (newline / pipe / dashes) ─────────
+  const HARD_SEP = /\n|\r\n|\r|\s*[|]\s*|\s*[—–]\s*/;
+  const hardParts = raw.split(HARD_SEP).map((p) => p.trim()).filter(Boolean);
+
+  if (hardParts.length >= 2) {
+    // Treat last part as "city, state zip" candidate
+    const cityLine = hardParts[hardParts.length - 1];
+    const streetLine = hardParts.slice(0, hardParts.length - 1).join(", ");
+    const normalised = normalizeCityStateLine(cityLine);
+    if (normalised) return `${streetLine}\n${normalised}`;
+  }
+
+  // ── Step 2: no hard separator – split by commas ──────────────────────────────
+  // Example: "4025 E. La Palma Ave, Suite 101, Anaheim, CA 92807"
+  //           seg[0]               seg[1]      seg[2]  seg[3]
+  const segs = raw.split(",").map((s) => s.trim()).filter(Boolean);
+
+  if (segs.length < 2) {
+    // Nothing we can do – return as-is (single token)
+    return raw.trim();
+  }
+
+  // Try to identify where "City  State  ZIP" starts by scanning from the end.
+  // The ZIP is a 5-digit (optionally +4) number; state is 2-letter abbreviation
+  // or a known full name; city is whatever comes before.
+  //
+  // We look for a segment matching: "State ZIP" or "State" followed by "ZIP".
+  //
+  // Walk backwards through segments:
+  //   – if last seg is "ZIP" → state is second-to-last, city is third-to-last
+  //   – if last seg is "State ZIP" → city is second-to-last
+  //   – if last seg is "City, State ZIP" (already joined) → handled above
+
+  const ZIP_RE   = /^\d{5}(?:-\d{4})?$/;
+  const STATE_RE = /^[A-Za-z ]{2,20}$/;
+
+  let zipToken   = "";
+  let stateToken = "";
+  let cityToken  = "";
+  let streetEndIdx = segs.length; // exclusive index of last street segment
+
+  const last = segs[segs.length - 1];
+
+  // Case A: last segment = "State ZIP"  e.g. "CA 92807" or "California 92807"
+  const stateZipMatch = last.match(/^([A-Za-z ]{2,20})\s+(\d{5}(?:-\d{4})?)$/);
+  if (stateZipMatch) {
+    stateToken  = stateZipMatch[1];
+    zipToken    = stateZipMatch[2];
+    cityToken   = segs[segs.length - 2] ?? "";
+    streetEndIdx = segs.length - 2;
+  }
+  // Case B: last segment = ZIP only, second-to-last = State
+  else if (ZIP_RE.test(last) && segs.length >= 3 && STATE_RE.test(segs[segs.length - 2])) {
+    zipToken    = last;
+    stateToken  = segs[segs.length - 2];
+    cityToken   = segs[segs.length - 3] ?? "";
+    streetEndIdx = segs.length - 3;
+  }
+  // Case C: last segment = "City State ZIP"  e.g. "Anaheim California 92807"
+  else {
+    const cityStateZip = last.match(/^(.+?)\s+([A-Za-z]{2,20})\s+(\d{5}(?:-\d{4})?)$/);
+    if (cityStateZip) {
+      cityToken   = cityStateZip[1];
+      stateToken  = cityStateZip[2];
+      zipToken    = cityStateZip[3];
+      streetEndIdx = segs.length - 1;
+    }
+  }
+
+  if (!zipToken || !stateToken || !cityToken) {
+    // Cannot parse – return trimmed original
+    return raw.trim();
+  }
+
+  const streetParts = segs.slice(0, streetEndIdx).filter(Boolean);
+  if (streetParts.length === 0) return raw.trim();
+
+  const streetLine = streetParts.join(", ");
+  const abbr       = normalizeState(stateToken);
+  const cityLine   = `${cityToken.trim()}, ${abbr} ${zipToken}`;
+
+  return `${streetLine}\n${cityLine}`;
+}
+
+/**
+ * Given a string that should represent "City, State ZIP", returns it normalised
+ * (state abbreviated) or null if it doesn't look like one.
+ */
+function normalizeCityStateLine(line: string): string | null {
+  // "Anaheim, CA 92807" or "Anaheim, California, 92807" or "Anaheim CA 92807"
+  const m = line.match(/^(.+?)[,\s]+([A-Za-z ]{2,20})[,\s]+(\d{5}(?:-\d{4})?)$/);
+  if (!m) return null;
+  const city = m[1].trim();
+  const abbr = normalizeState(m[2]);
+  const zip  = m[3];
+  return `${city}, ${abbr} ${zip}`;
+}
+
 // ── Cloudinary helpers ────────────────────────────────────────────────────────
 
 function buildCloudinaryResizedUrl(url: string, w: number, h: number): string {
@@ -296,13 +445,13 @@ export function useSignatureBuilder() {
   const formik = useFormik<SignatureFormValues>({
     initialValues: {
       name:     "",
-      fullName: "Reinalyn Bancifra",
-      title:    "Marketing Coordinator",
+      fullName: "",
+      title:    "",
       phone:    "",
       direct:   "",
       sms:      "",
       fax:      "",
-      email:    "rbancifra@inszoneins.com",
+      email:    "",
       address:  "",
       website:  "",
       lic:      "",
@@ -327,6 +476,31 @@ export function useSignatureBuilder() {
   }
   function handleFaxChange(e: React.ChangeEvent<HTMLInputElement>) {
     formik.setFieldValue("fax", formatPhone(e.target.value));
+  }
+
+  // ── Address handler ───────────────────────────────────────────────────────
+
+  function handleAddressChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
+    const val = e.target.value;
+    const lines = val.split("\n");
+    if (lines.length > 2) return;
+    if (val.length > FIELD_MAX_LENGTH.address) return;
+    formik.setFieldValue("address", val);
+  }
+
+  /**
+   * Called onBlur on the address textarea.
+   * Attempts to auto-format the pasted/typed value into 2 canonical lines.
+   */
+  function handleAddressBlur() {
+    const raw = formik.values.address;
+    if (!raw.trim()) return;
+
+    const formatted = formatAddress(raw);
+    // Only update if the formatter actually changed something
+    if (formatted && formatted !== raw) {
+      formik.setFieldValue("address", formatted);
+    }
   }
 
   // ── Upload ────────────────────────────────────────────────────────────────
@@ -611,14 +785,6 @@ export function useSignatureBuilder() {
     }
   }
 
-  function handleAddressChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
-    const val = e.target.value;
-    const lines = val.split("\n");
-    if (lines.length > 2) return;
-    if (val.length > FIELD_MAX_LENGTH.address) return;
-    formik.setFieldValue("address", val);
-  }
-
   return {
     formik,
     debouncedValues,
@@ -658,5 +824,6 @@ export function useSignatureBuilder() {
     handleSmsChange,
     handleFaxChange,
     handleAddressChange,
+    handleAddressBlur,   // ← nuevo: conectar al onBlur del textarea
   };
 }
