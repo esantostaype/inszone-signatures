@@ -160,6 +160,7 @@ export function SignatureForm({ state }: SignatureFormProps) {
           <Input
             name="fullName"
             value={values.fullName}
+            placeholder="e.g. John Smith"
             onChange={handleChange}
             onBlur={handleBlur}
             slotProps={{ input: { maxLength: FIELD_MAX_LENGTH.fullName } }}
@@ -177,6 +178,7 @@ export function SignatureForm({ state }: SignatureFormProps) {
             minRows={1}
             maxRows={2}
             value={values.title}
+            placeholder="e.g. Marketing Coordinator"
             onChange={handleChange}
             onBlur={handleBlur}
             slotProps={{ textarea: { maxLength: FIELD_MAX_LENGTH.title } }}
@@ -243,6 +245,7 @@ export function SignatureForm({ state }: SignatureFormProps) {
           <Input
             name="email"
             type="email"
+            placeholder="e.g. email@example.com"
             value={values.email}
             onChange={handleChange}
             onBlur={handleBlur}
