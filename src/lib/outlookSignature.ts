@@ -119,7 +119,7 @@ export function buildOutlookSignatureHtml(input: SignatureInput): string {
 
   const certBlock = certRequest && (signatureType === "basic" || signatureType === "formerly")
     ? `<p style="font-family:Arial,sans-serif;margin:12px 0 0;font-size:12px;line-height:16px;text-align:left;">
-        <span style="color:#f00;font-weight:bold;">Certificate Request</span><br>
+        <span style="color:#f00;">Certificate Request</span><br>
         Fax: 916-636-0134<br>
         Email: <a href="mailto:certs@inszoneins.com" style="color:#6F8CC0;text-decoration:underline;">certs@inszoneins.com</a>
       </p>`

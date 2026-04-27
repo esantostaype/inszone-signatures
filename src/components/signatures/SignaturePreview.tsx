@@ -235,7 +235,7 @@ function SignatureTable({ values, signatureType, logoUrl, logoWidth, logoHeight,
               <p style={{ margin: 0, letterSpacing: "1.5pt", color: c.mutedColor, textAlign: "left" }}>LIC #0F82764</p>
               {certRequest && (signatureType === "basic" || signatureType === "formerly") && (
                 <p style={{ margin: "12px 0 0", fontSize: 12, lineHeight: "16px", textAlign: "left" }}>
-                  <span style={{ color: "#f00", fontWeight: "bold" }}>Certificate Request</span><br />
+                  <span style={{ color: "#f00" }}>Certificate Request</span><br />
                   Fax: 916-636-0134<br />
                   Email:{" "}
                   <a href="mailto:certs@inszoneins.com" style={{ color: c.linkColor, textDecoration: "underline" }}>
