@@ -65,7 +65,7 @@ function buildRightColumn(
       <p style="margin:0;text-align:left;">
         ${inszoneImg}
       </p>
-      <p style="margin:12px 0 0;text-align:left;color:#000;font-size:12px;line-height:16px;">${addressHtml}</p>`;
+      <p style="font-family:Arial,sans-serif;font-size:12px;margin:12px 0 0;text-align:left;color:#000;line-height:16px;">${addressHtml}</p>`;
   }
 
   const partnerImg = partnerLogoUrl
@@ -77,7 +77,7 @@ function buildRightColumn(
       <p style="margin:0;text-align:center;">
         ${inszoneImg}
       </p>
-      <p style="display:block;margin:12px 0;color:#6F8CC0;font-weight:bold;text-align:center;">formerly operating as</p>
+      <p style="font-family:Arial,sans-serif;font-size:12px;display:block;margin:12px 0;color:#6F8CC0;font-weight:bold;text-align:center;">formerly operating as</p>
       <p style="margin:0;text-align:center;">
         ${partnerImg}
       </p>`;
@@ -88,7 +88,7 @@ function buildRightColumn(
     <p style="margin:0;text-align:center;">
       ${partnerImg}
     </p>
-    <p style="display:block;margin:0 0 8px;color:#6F8CC0;font-weight:bold;text-align:center;">powered by</p>
+    <p style="font-family:Arial,sans-serif;font-size:12px;display:block;margin:0 0 8px;color:#6F8CC0;font-weight:bold;text-align:center;">powered by</p>
     <p style="margin:0;text-align:center;">
       ${inszoneImg}
     </p>`;
@@ -118,7 +118,7 @@ export function buildOutlookSignatureHtml(input: SignatureInput): string {
   const rightColumn  = buildRightColumn(partnerLogoUrl, logoW, logoH, signatureType, rawAddress, certRequest);
 
   const certBlock = certRequest && (signatureType === "basic" || signatureType === "formerly")
-    ? `<p style="margin:12px 0 0;font-size:12px;line-height:16px;text-align:left;">
+    ? `<p style="font-family:Arial,sans-serif;margin:12px 0 0;font-size:12px;line-height:16px;text-align:left;">
         <span style="color:#f00;font-weight:bold;">Certificate Request</span><br>
         Fax: 916-636-0134<br>
         Email: <a href="mailto:certs@inszoneins.com" style="color:#6F8CC0;text-decoration:underline;">certs@inszoneins.com</a>
@@ -138,14 +138,14 @@ export function buildOutlookSignatureHtml(input: SignatureInput): string {
         <tr>
           <!-- LEFT COLUMN -->
           <td valign="top" style="text-align:right;padding-right:16px;border-right:2px solid #6F8CC0;">
-            <p style="margin:0 0 4px;font-size:19px;color:${nameColor};"><b>${fullName}</b></p>
-            <p style="margin:0;color:#000;line-height:12px;">${title}</p>
-            <p style="margin:12px 0 0;color:#000;">
+            <p style="font-family:Arial,sans-serif;margin:0 0 4px;font-size:19px;color:${nameColor};"><b>${fullName}</b></p>
+            <p style="font-family:Arial,sans-serif;margin:0;font-size:12px;color:#000;line-height:16px;">${title}</p>
+            <p style="font-family:Arial,sans-serif;margin:12px 0 0;font-size:12px;line-height:16px;color:#000;">
               ${contactLines}<br>
-              <a href="mailto:${email}" style="color:#6F8CC0;text-decoration:underline">${email}</a>
+              <a href="mailto:${email}" style="font-family:Arial,sans-serif;font-size:12px;color:#6F8CC0;text-decoration:underline">${email}</a>
             </p>
-            ${signatureType !== "basic" && address ? `<p style="margin:12px 0 0;color:#000;">${address}</p>` : ""}
-            ${lic ? `<p style="margin:12px 0 0;letter-spacing:1.5pt;">${lic}</p>` : ""}
+            ${signatureType !== "basic" && address ? `<p style="font-family:Arial,sans-serif;margin:12px 0 0;font-size:12px;line-height:16px;color:#000;">${address}</p>` : ""}
+            ${lic ? `<p style="font-family:Arial,sans-serif;margin:12px 0 0;font-size:12px;letter-spacing:1.5pt;">${lic}</p>` : ""}
             <table cellpadding="0" cellspacing="0" border="0" style="margin-top:12px;display:inline-table;border-collapse:collapse;">
               <tr>
                 <td style="padding:0;">
@@ -172,10 +172,10 @@ export function buildOutlookSignatureHtml(input: SignatureInput): string {
           <!-- RIGHT COLUMN -->
           <td valign="top" style="padding-left:16px;">
             ${rightColumn}
-            <p style="margin:16px 0 8px;text-align:left;">
+            <p style="font-family:Arial,sans-serif;font-size:12px;margin:16px 0 8px;text-align:left;">
               <a href="https://inszoneinsurance.com/" target="_blank" style="color:#6F8CC0;text-decoration:underline;">INSZONEINSURANCE.COM</a>
             </p>
-            <p style="margin:0;letter-spacing:1.5pt;text-align:left;">LIC #0F82764</p>
+            <p style="font-family:Arial,sans-serif;font-size:12px;margin:0;letter-spacing:1.5pt;text-align:left;">LIC #0F82764</p>
             ${certBlock}
           </td>
         </tr>
