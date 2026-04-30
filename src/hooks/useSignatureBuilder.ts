@@ -619,15 +619,11 @@ export function useSignatureBuilder() {
 
   // ── Resize save ───────────────────────────────────────────────────────────
 
-  function handleResizeSave(w: number, h: number) {
-    setLogoDisplayWidth(w);
-    setLogoDisplayHeight(h);
-
-    const sourceUrl = activeLogo?.secure_url;
-    if (sourceUrl) {
-      setResizedLogoUrl(buildCloudinaryResizedUrl(sourceUrl, w, h));
-    }
-  }
+  function handleResizeSave(w: number, h: number, url: string) {
+  setLogoDisplayWidth(w);
+  setLogoDisplayHeight(h);
+  setResizedLogoUrl(url); // ← la URL ya viene construida desde ResizeLogoModal
+}
 
   // ── Save ──────────────────────────────────────────────────────────────────
 

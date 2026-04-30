@@ -51,7 +51,7 @@ interface ResizeLogoContentProps {
   originalHeight: number;
   initialWidth:   number;
   initialHeight:  number;
-  onSave:         (width: number, height: number) => void;
+  onSave:         (width: number, height: number, url: string) => void;
 }
 
 // ─── Interior del modal ───────────────────────────────────────────────────────
@@ -155,9 +155,12 @@ function ResizeLogoContent({
   }
 
   function handleSave() {
-    onSave(clamp(width), clamp(height));
+    const w = clamp(width);
+    const h = clamp(height);
+    const url = buildCloudinaryResizedUrl(secureUrl || imageUrl, w, h); // ← URL real
+    onSave(w, h, url);
     closeModal();
-  }
+}
 
   return (
     // px-4 (no px-8) para que no haya scroll horizontal
@@ -273,12 +276,12 @@ function ResizeLogoContent({
 
 interface OpenResizeLogoModal {
   imageUrl:       string;
-  secureUrl:      string;  // ← requerido para Cloudinary
+  secureUrl:      string;
   originalWidth:  number;
   originalHeight: number;
   currentWidth:   number;
   currentHeight:  number;
-  onSave:         (width: number, height: number) => void;
+  onSave:         (width: number, height: number, url: string) => void; // ← + url
 }
 
 export function useResizeLogoModal() {

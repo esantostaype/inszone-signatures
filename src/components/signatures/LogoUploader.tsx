@@ -16,7 +16,7 @@ import { useResizeLogoModal } from "@/components/signatures/ResizeLogoModal";
 interface LogoUploaderProps {
   onUpload:          (file: File) => void;
   onEnhance:         () => void;
-  onResizeSave:      (w: number, h: number) => void;
+  onResizeSave:      (w: number, h: number, url: string) => void; // ← + url
   canEnhance:        boolean;
   busyUpload:        boolean;
   busyEnhance:       boolean;
