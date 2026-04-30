@@ -17,40 +17,37 @@ export async function POST(req: Request) {
 
     const buffer = Buffer.from(await file.arrayBuffer());
 
-    // 1) Analizar + procesar localmente (remover fondo, trim, calcular AR)
-    const { plan, trimmedAr, box, processedBuffer } = await analyzeLogoBuffer(buffer);
+    // 1) Procesar localmente: fondo blanco + trim + padding
+    const { processedBuffer, trimmedAr, box } = await analyzeLogoBuffer(buffer);
 
-    // 2) Subir el buffer YA PROCESADO a Cloudinary (PNG con transparencia)
+    // 2) Subir el buffer procesado a Cloudinary
     const uploadResult = await new Promise<any>((resolve, reject) => {
       cloudinary.uploader.upload_stream(
         {
-          folder: "logos",
+          folder:        "logos",
           resource_type: "image",
-          format: "png", // forzar PNG para preservar alpha
+          format:        "png",
         },
         (err, result) => (err ? reject(err) : resolve(result))
       ).end(processedBuffer);
     });
 
-    const cloudName = process.env.CLOUDINARY_CLOUD_NAME!;
-
-    // 3) URL con resize inteligente (sin transformaciones de fondo — ya está limpio)
+    // 3) URL con resize inteligente
     const displayUrl = buildSmartDisplayUrl({
-      cloudName,
-      publicId: uploadResult.public_id,
+      cloudName: process.env.CLOUDINARY_CLOUD_NAME!,
+      publicId:  uploadResult.public_id,
       box,
     });
 
     return NextResponse.json({
       public_id:   uploadResult.public_id,
-      secure_url:  uploadResult.secure_url,  // original procesado sin resize
-      display_url: displayUrl,               // ← usar esta en la firma y preview
-      width:       box.w,                    // ← ancho visual correcto para el HTML
-      height:      box.h,                    // ← alto visual correcto para el HTML
+      secure_url:  uploadResult.secure_url,
+      display_url: displayUrl,
+      width:       box.w,
+      height:      box.h,
       trimmed_ar:  trimmedAr,
       bytes:       uploadResult.bytes,
       format:      "png",
-      plan,
     });
 
   } catch (e: any) {
