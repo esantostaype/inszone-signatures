@@ -43,6 +43,16 @@ const NO_FAX_HDR_WEBSITE_UP       = -110_000; // EMU — cuánto suben los websi
 // Positivo = hacia la derecha. Ajusta si el resultado visual no es exacto.
 const NO_FAX_FTR_PHONE_SHIFT = 470_535;
 
+// ── Ajustes cuando el address es muy largo ──────────────────────────────────
+// El cuadro de dirección del footer tiene un ancho fijo (~2_097_405 EMU). Si una
+// línea del address no cabe, Word la envuelve dentro del mismo cuadro, y esa
+// segunda línea visual "roba" el espacio de la línea 2 real del address (que
+// deja de verse). Para evitarlo, ensanchamos el cuadro y corremos PHONE/FAX
+// a la derecha lo mismo que se ensanchó, para que no se solapen.
+const ADDR_MAX_CHARS_PER_LINE = 36;    // caracteres aprox. que caben en el ancho original
+const ADDR_CHAR_WIDTH_EMU     = 58_000; // ancho promedio por carácter (Arial 9pt @96dpi)
+const ADDR_EXTRA_WIDTH_CAP    = 900_000; // EMU — tope de ensanche/corrimiento
+
 export async function generateLetterhead(params: LetterheadParams): Promise<Uint8Array> {
   const {
     phone, fax, address, website,
@@ -173,6 +183,28 @@ export async function generateLetterhead(params: LetterheadParams): Promise<Uint
     footer1 = adjustWpAnchorPosH(footer1, "65524ED4", NO_FAX_FTR_PHONE_SHIFT);
     footer1 = adjustWpAnchorPosH(footer1, "79D1B25D", NO_FAX_FTR_PHONE_SHIFT);
     footer1 = adjustWpAnchorPosH(footer1, "57287E4F", NO_FAX_FTR_PHONE_SHIFT);
+  }
+
+  // 3d. Ajustes cuando el address es muy largo ────────────────────────────────
+  const longestAddrLine = addressLines.reduce((max, line) => Math.max(max, line.trim().length), 0);
+  const addrOverflowChars = Math.max(0, longestAddrLine - ADDR_MAX_CHARS_PER_LINE);
+  const addrExtraWidth = Math.min(addrOverflowChars * ADDR_CHAR_WIDTH_EMU, ADDR_EXTRA_WIDTH_CAP);
+
+  if (addrExtraWidth > 0) {
+    // Ensancha el cuadro de dirección (3A1005E1) para que la línea no se envuelva
+    footer1 = widenWpAnchorExtent(footer1, "3A1005E1", addrExtraWidth);
+
+    // Corre PHONE a la derecha para dejarle espacio al address
+    footer1 = adjustWpAnchorPosH(footer1, "65524ED4", addrExtraWidth);
+    footer1 = adjustWpAnchorPosH(footer1, "79D1B25D", addrExtraWidth);
+    footer1 = adjustWpAnchorPosH(footer1, "57287E4F", addrExtraWidth);
+
+    // Si hay FAX, lo corre también para mantener el espaciado con PHONE
+    if (hasFax) {
+      footer1 = adjustWpAnchorPosH(footer1, "573D981B", addrExtraWidth);
+      footer1 = adjustWpAnchorPosH(footer1, "19071B4E", addrExtraWidth);
+      footer1 = adjustWpAnchorPosH(footer1, "3BD21793", addrExtraWidth);
+    }
   }
 
   zip.file("word/footer1.xml", footer1);
@@ -318,6 +350,28 @@ function adjustWpAnchorPosV(xml: string, anchorId: string, deltaEMU: number): st
   let anchor = xml.slice(start, end);
   anchor = anchor.replace(
     /(<wp:positionV\b[^>]*>\s*<wp:posOffset>)(-?\d+)(<\/wp:posOffset>)/,
+    (_, pre, val, post) => `${pre}${Math.round(parseInt(val, 10) + deltaEMU)}${post}`
+  );
+
+  return xml.slice(0, start) + anchor + xml.slice(end);
+}
+
+/**
+ * Ensancha el <wp:extent> y el <a:ext> (shape interno) de un <wp:anchor> en
+ * deltaEMU, manteniendo la altura (cy) sin cambios.
+ */
+function widenWpAnchorExtent(xml: string, anchorId: string, deltaEMU: number): string {
+  const bounds = findWpAnchorBounds(xml, anchorId);
+  if (!bounds) return xml;
+  const [start, end] = bounds;
+
+  let anchor = xml.slice(start, end);
+  anchor = anchor.replace(
+    /(<wp:extent\s+cx=")(\d+)(")/,
+    (_, pre, val, post) => `${pre}${Math.round(parseInt(val, 10) + deltaEMU)}${post}`
+  );
+  anchor = anchor.replace(
+    /(<a:ext\s+cx=")(\d+)(")/,
     (_, pre, val, post) => `${pre}${Math.round(parseInt(val, 10) + deltaEMU)}${post}`
   );
 

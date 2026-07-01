@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
     // Address is optional for all types; basic falls back to HQ address
     const resolvedAddress = address?.trim() || null;
 
-    if (!name || !fullName || !title || !phone || !email) {
+    if (!name || !fullName || !title || !email) {
       return NextResponse.json(
         { success: false, message: "Missing required fields" },
         { status: 400 }
@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
       fullName:          fullName.trim(),
       title:             title.trim(),
       type:              signatureType,
-      phone:             phone.trim(),
+      phone:             phone?.trim()   || null,
       fax:               fax?.trim()     || null,
       direct:            direct?.trim()  || null,
       sms:               sms?.trim()     || null,

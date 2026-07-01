@@ -72,7 +72,7 @@ async function triggerLetterheadDownload(row: SavedSignature): Promise<void> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       partnerName:       row.name,
-      phone:             row.phone  || "",
+      phone:             row.direct || "",
       fax:               row.fax   || "",
       address:           row.address ?? "",
       website:           row.website || "",

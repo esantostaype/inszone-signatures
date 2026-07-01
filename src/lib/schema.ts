@@ -7,7 +7,7 @@ export const signatures = sqliteTable("signatures", {
   fullName:          text("full_name").notNull(),
   title:             text("title").notNull(),
   type:              text("type").notNull().default("powered-by"),
-  phone:             text("phone").notNull(),
+  phone:             text("phone"),
   fax:               text("fax"),
   direct:            text("direct"),
   sms:               text("sms"),

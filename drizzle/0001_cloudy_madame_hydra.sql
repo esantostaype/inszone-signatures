@@ -1,0 +1,1 @@
+ALTER TABLE `signatures` ALTER COLUMN "phone" TO "phone" text;

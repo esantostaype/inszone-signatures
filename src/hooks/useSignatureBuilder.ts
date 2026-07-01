@@ -78,7 +78,7 @@ function buildSchema(_signatureType: SignatureType) {
     name:     Yup.string().trim().min(2).max(FIELD_MAX_LENGTH.name, `Max ${FIELD_MAX_LENGTH.name} characters`).required("Signature name is required"),
     fullName: Yup.string().trim().min(2).max(FIELD_MAX_LENGTH.fullName, `Max ${FIELD_MAX_LENGTH.fullName} characters`).required("Full name is required"),
     title:    Yup.string().trim().min(2).max(FIELD_MAX_LENGTH.title, `Max ${FIELD_MAX_LENGTH.title} characters`).required("Job title is required"),
-    phone:    Yup.string().trim().min(2).max(FIELD_MAX_LENGTH.phone).required("Phone is required"),
+    phone:    Yup.string().trim().max(FIELD_MAX_LENGTH.phone).optional(),
     direct:   Yup.string().trim().max(FIELD_MAX_LENGTH.direct).optional(),
     sms:      Yup.string().trim().max(FIELD_MAX_LENGTH.sms).optional(),
     fax:      Yup.string().trim().max(FIELD_MAX_LENGTH.fax).optional(),
@@ -661,7 +661,7 @@ export function useSignatureBuilder() {
         fullName:          formik.values.fullName,
         title:             formik.values.title,
         type:              signatureType,
-        phone:             formik.values.phone,
+        phone:             formik.values.phone || null,
         direct:            formik.values.direct || null,
         sms:               formik.values.sms    || null,
         fax:               formik.values.fax    || null,
@@ -696,7 +696,7 @@ export function useSignatureBuilder() {
           const committed = await ensureCommitted(activeLogo);
           await triggerLetterheadDownload({
             partnerName:       formik.values.name || formik.values.fullName,
-            phone:             formik.values.phone,
+            phone:             formik.values.direct || "",
             fax:               formik.values.fax || "",
             address:           formik.values.address || "",
             website:           formik.values.website || "",

@@ -190,7 +190,7 @@ export function SignatureForm({ state }: SignatureFormProps) {
 
         {/* Phone */}
         <FormControl error={Boolean(touched.phone && errors.phone)}>
-          <FormLabel>Phone *</FormLabel>
+          <FormLabel>Phone (optional)</FormLabel>
           <Input
             name="phone"
             placeholder="e.g. 479-394-2244"

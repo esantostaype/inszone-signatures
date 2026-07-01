@@ -9,9 +9,9 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { partnerName, phone, fax, address, website, partnerLogoUrl, partnerLogoWidth, partnerLogoHeight } = body;
 
-    if (!partnerName || !phone || !address) {
+    if (!partnerName || !address) {
       return NextResponse.json(
-        { success: false, message: "Missing required fields: partnerName, phone, address" },
+        { success: false, message: "Missing required fields: partnerName, address" },
         { status: 400 }
       );
     }
@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
     // Returns Uint8Array — compatible with BodyInit (no TypeScript error)
     const docxData = await generateLetterhead({
       partnerName,
-      phone,
+      phone:             phone        || "",
       fax:               fax          || "",
       address,
       website:           website      || "",
